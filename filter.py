@@ -1,4 +1,5 @@
 """定义滤波器"""
+
 import re
 
 from PyQt5.QtCore import Qt
@@ -50,10 +51,12 @@ class FilterI(object):
         self.combx.setToolTip('The type of filter')
         self.combx.addItems(self.btype)
         self.combx.setCurrentText(self.method)
+        self.combx.currentIndexChanged.connect(self.resetCalculateParmas)
 
         self.checkbx = CheckBox('Analog Filter')
         self.checkbx.setToolTip('When True, return an analog filter, otherwise a digital filter is returned')
         self.checkbx.setChecked(self.analog)
+        self.checkbx.stateChanged.connect(self.resetCalculateParmas)
 
         # 计算区域组件
         cal_label = Label('Calculate Order And Frequency:')
@@ -68,6 +71,7 @@ class FilterI(object):
                               'Highpass: wp = 0.3, ws = 0.2\n'
                               'Bandpass: wp = [0.2, 0.5], ws = [0.1, 0.6]\n'
                               'Bandstop: wp = [0.1, 0.6], ws = [0.2, 0.5]')
+        self.wp_le.textChanged.connect(self.resetCalculateParmas)
 
         ws_label = Label('Stopband Edge Frequency(ws)')
         self.ws_le = NumPointLineEdit()
@@ -78,16 +82,19 @@ class FilterI(object):
                               'Highpass: wp = 0.3, ws = 0.2\n'
                               'Bandpass: wp = [0.2, 0.5], ws = [0.1, 0.6]\n'
                               'Bandstop: wp = [0.1, 0.6], ws = [0.2, 0.5]')
+        self.ws_le.textChanged.connect(self.resetCalculateParmas)
 
         gpass_label = Label('Passband Loss(gpass)')
         self.gpass_le = OnlyNumLineEdit()
         self.gpass_le.setText(str(self.gpass))
         self.gpass_le.setToolTip('The maximum loss in the passband (dB)')
+        self.gpass_le.textChanged.connect(self.resetCalculateParmas)
 
         gstop_label = Label('Stopband Attenuation(gstop)')
         self.gstop_le = OnlyNumLineEdit()
         self.gstop_le.setText(str(self.gstop))
         self.gstop_le.setToolTip('The minimum attenuation in the stopband (dB)')
+        self.gstop_le.textChanged.connect(self.resetCalculateParmas)
 
         cal_order_label = Label('Order')
         self.cal_order_le = OnlyNumLineEdit()
@@ -289,8 +296,11 @@ class FilterI(object):
                 wp = [float(i) for i in re.findall('[0]{1}.{1}\d+', self.wp)]
                 ws = [float(i) for i in re.findall('[0]{1}.{1}\d+', self.ws)]
 
-            self.cal_order, self.cal_Wn = self.cal_names[self.filter](wp=wp, ws=ws, gpass=self.gpass, gstop=self.gstop,
-                                                                      analog=self.analog)
+            try:
+                self.cal_order, self.cal_Wn = self.cal_names[self.filter](wp=wp, ws=ws, gpass=self.gpass,
+                                                                          gstop=self.gstop, analog=self.analog)
+            except Exception as err:
+                printError(err)
 
             self.cal_order_le.setText(str(self.cal_order))
             self.cal_Wn_le.setText(str(self.cal_Wn))
@@ -300,6 +310,14 @@ class FilterI(object):
         else:
             self.order_le.setText(str(self.cal_order))
             self.Wn_le.setText(str(self.cal_Wn))
+
+    def resetCalculateParmas(self):
+        """每次参数改动后重置计算按钮"""
+
+        self.flag = True
+        self.cal_order_le.setText('')
+        self.cal_Wn_le.setText('')
+        self.cal_btn.setText('Calculate')
 
     def design(self):
         """设计滤波器"""

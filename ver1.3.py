@@ -1,8 +1,9 @@
 """
-2023-6-5
+2023-6-7
 ver1.3
 
 1.添加播放当前数据音频的功能，可暂停与重置
+2.IIR滤波器现在可保存上一次选择相同滤波器的参数
 """
 
 import ctypes
@@ -1911,36 +1912,42 @@ class MainWindow(QMainWindow):
     def iirCalculateFilterParams(self):
         """计算滤波器阶数和自然频率"""
 
-        self.filter = FilterI(self.iir_menu.sender().text())
+        if not hasattr(self, 'filter') or self.filter.name != self.iir_menu.sender().text():
+                self.filter = FilterI(self.iir_menu.sender().text())
 
-        dialog_layout = QVBoxLayout()
-        dialog_layout.addLayout(self.filter.cal_vbox)
-        dialog_layout.addSpacing(10)
-        dialog_layout.addLayout(self.filter.vbox)
-        dialog_layout.addSpacing(10)
-        dialog_layout.addWidget(self.filter.btn)
-        self.filter.dialog.setLayout(dialog_layout)
+                dialog_layout = QVBoxLayout()
+                dialog_layout.addLayout(self.filter.cal_vbox)
+                dialog_layout.addSpacing(10)
+                dialog_layout.addLayout(self.filter.vbox)
+                dialog_layout.addSpacing(10)
+                dialog_layout.addWidget(self.filter.btn)
+                self.filter.dialog.setLayout(dialog_layout)
 
-        self.filter.btn.clicked.connect(self.plotIIRFilter)
-        self.filter.btn.clicked.connect(self.filter.dialog.close)
+                self.filter.btn.clicked.connect(self.plotIIRFilter)
+                self.filter.btn.clicked.connect(self.filter.dialog.close)
+
         self.filter.dialog.exec_()
 
     def iirDesignBesselFilter(self):
         """设计Bessel/Thomson滤波器"""
 
-        self.filter = FilterI('Bessel/Thomson')
+        if not hasattr(self, 'filter') or self.filter.name != 'Bessel/Thomson':
+            self.filter = FilterI('Bessel/Thomson')
 
-        self.filter.btn.clicked.connect(self.plotIIRFilter)
-        self.filter.btn.clicked.connect(self.filter.dialog.close)
+            self.filter.btn.clicked.connect(self.plotIIRFilter)
+            self.filter.btn.clicked.connect(self.filter.dialog.close)
+
         self.filter.dialog.exec_()
 
     def iirDesignCombFilter(self):
         """设计comb类滤波器"""
 
-        self.filter = FilterII(self.iir_menu.sender().text())
+        if not hasattr(self, 'filter') or self.filter.name != self.iir_menu.sender().text():
+            self.filter = FilterII(self.iir_menu.sender().text())
 
-        self.filter.btn.clicked.connect(self.plotIIRFilter)
-        self.filter.btn.clicked.connect(self.filter.dialog.close)
+            self.filter.btn.clicked.connect(self.plotIIRFilter)
+            self.filter.btn.clicked.connect(self.filter.dialog.close)
+
         self.filter.dialog.exec_()
 
     def plotIIRFilter(self):
