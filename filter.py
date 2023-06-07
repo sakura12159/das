@@ -1,4 +1,4 @@
-"""英文版定义滤波器的类"""
+"""定义滤波器"""
 import re
 
 from PyQt5.QtCore import Qt

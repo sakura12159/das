@@ -1,4 +1,4 @@
-"""英文版重写父类组件的类"""
+"""重写组件"""
 
 from PyQt5.QtCore import QRegExp
 from PyQt5.QtGui import QRegExpValidator, QFont
