@@ -185,16 +185,26 @@ def OSTU(data):
     return threshold
 
 
-def phaseDifferenceToStrainRate(data, sr):
-    """相位差与应变率转化"""
+def convertDataUnit(data, sr, src, aim):
+    """数据单位转换"""
 
-    return 11.6e-9 * sr * data
+    if src == 'PD':
+        if aim == 'SR':
+            return data * 11.6e-9 * sr
+        elif aim == 'S':
+            data = data * 11.6e-9 * sr
+            x = data.shape[1]
+            x = np.linspace(0, x, x)
+            return integrate.cumtrapz(data, x, initial=0) * 10e6
+
+    elif src == 'SR':
+        if aim == 'PD':
+            return data / 11.6e-9 / sr
+        elif aim == 'S':
+            x = data.shape[1]
+            x = np.linspace(0, x, x)
+            return integrate.cumtrapz(data, x, initial=0) * 10e6
 
 
-def phaseDifferenceToStrain(data, sr):
-    """相位差与应变转化"""
 
-    data = 11.6e-9 * sr * data
-    x = data.shape[1]
-    x = np.linspace(0, x, x)
-    return integrate.cumtrapz(data, x, initial=0)
+
