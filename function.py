@@ -4,6 +4,7 @@ import base64
 import os
 
 import numpy as np
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMessageBox
 from scipy import stats, integrate
 
@@ -27,9 +28,21 @@ def picture2py(py_name):
 
 
 def getPicture(pic_code, pic_name):
+    """创建图片"""
+
     image = open(pic_name, 'wb')
     image.write(base64.b64decode(pic_code))
     image.close()
+
+
+def setPicture(picture, picture_name, widget, setWhite=True):
+    """设置图片"""
+
+    getPicture(picture, picture_name)  # 从image.py中获取图片信息生成图片
+    widget.setIcon(QIcon(picture_name))  # 加载图片
+    os.remove(picture_name)  # 移除图片释放内存
+    if setWhite:
+        widget.setStyleSheet('background-color: rgb(255, 255, 255)')
 
 
 if __name__ == '__main__':
@@ -204,7 +217,3 @@ def convertDataUnit(data, sr, src, aim):
             x = data.shape[1]
             x = np.linspace(0, x, x)
             return integrate.cumtrapz(data, x, initial=0) * 10e6
-
-
-
-

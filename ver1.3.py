@@ -9,6 +9,7 @@ ver1.3
 """
 
 import ctypes
+import os
 import sys
 import wave
 
@@ -52,6 +53,7 @@ class MainWindow(QMainWindow):
         self.screen_width = int(self.screen.screenGeometry().width() * 0.8)
         self.resize(self.screen_width, self.screen_height)
 
+
     def initUI(self):
         """初始化ui"""
 
@@ -63,9 +65,9 @@ class MainWindow(QMainWindow):
         self.menu_bar.setStyleSheet('font-size: 18px; font-family: "Times New Roman";')
         self.setWindowTitle('DAS Visualizer')
 
-        getPicture(icon_jpg, 'icon.jpg')  # 从image.py中获取图片信息生成图片
-        self.setWindowIcon(QIcon('icon.jpg'))  # 加载图片
-        os.remove('icon.jpg')  # 移除图片释放内存
+        getPicture(icon_jpg, 'icon.jpg')
+        self.setWindowIcon(QIcon('icon.jpg'))
+        os.remove('icon.jpg')
 
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('myappid')  # 设置任务栏图标
 
@@ -448,11 +450,8 @@ class MainWindow(QMainWindow):
         self.file_path_line_edit = LineEdit()
         self.file_path_line_edit.setFocusPolicy(Qt.NoFocus)
 
-        getPicture(file_path_jpg, 'file_path.jpg')
         change_file_path_button = PushButton('')
-        change_file_path_button.setIcon(QIcon('file_path.jpg'))
-        os.remove('file_path.jpg')
-        change_file_path_button.setStyleSheet('background-color: rgb(255, 255, 255)')
+        setPicture(file_path_jpg, 'file_path.jpg', change_file_path_button)
         change_file_path_button.clicked.connect(self.changeFilePath)
 
         file_table_scrollbar = QScrollBar(Qt.Vertical)
@@ -510,17 +509,19 @@ class MainWindow(QMainWindow):
         data_params_hbox.addWidget(self.current_channels_line_edit)
 
         # 播放音频按钮
-        self.playBtn = PushButton('Play')
+        self.playBtn = PushButton('')
+        setPicture(play_jpg, 'play.jpg', self.playBtn)
         self.playBtn.clicked.connect(self.createWavFile)
         self.playBtn.clicked.connect(self.createPlayer)
         self.playBtn.clicked.connect(self.playBtnChangeState)
 
         # 停止音频播放按钮
-        self.abortBtn = PushButton('Abort')
-        self.abortBtn.clicked.connect(self.resetPlayer)
+        self.stopBtn = PushButton('')
+        setPicture(stop_jpg, 'stop.jpg', self.stopBtn)
+        self.stopBtn.clicked.connect(self.resetPlayer)
 
         self.playBtn.setDisabled(True)
-        self.abortBtn.setDisabled(True)
+        self.stopBtn.setDisabled(True)
 
         # GPS时间组件
         gps_from_label = Label('From')
@@ -534,7 +535,7 @@ class MainWindow(QMainWindow):
         gps_hbox = QHBoxLayout()
         gps_hbox.addWidget(self.playBtn)
         gps_hbox.addSpacing(5)
-        gps_hbox.addWidget(self.abortBtn)
+        gps_hbox.addWidget(self.stopBtn)
         gps_hbox.addSpacing(100)
         gps_hbox.addWidget(gps_from_label)
         gps_hbox.addWidget(self.gps_from_line_edit)
@@ -578,7 +579,7 @@ class MainWindow(QMainWindow):
         # 播放器默认状态
         if hasattr(self, 'player'):
             self.player.stop()
-        self.playBtn.setText('Play')
+        setPicture(play_jpg, 'play.jpg', self.playBtn)
         self.playerState = False  # 播放器否在播放
         self.hasWavFile = False  # 当前通道是否已创建了音频文件
         self.playerHasMedia = False  # 播放器是否已赋予了文件
@@ -684,11 +685,11 @@ class MainWindow(QMainWindow):
         """点击播放按钮改变文字和播放器状态"""
 
         if not self.playerState:
-            self.playBtn.setText('Pause')
+            setPicture(pause_jpg, 'pause.jpg', self.playBtn)
             self.player.play()
             self.playerState = True
         else:
-            self.playBtn.setText('Play')
+            setPicture(play_jpg, 'play.jpg', self.playBtn)
             self.player.pause()
             self.playerState = False
 
@@ -732,7 +733,7 @@ class MainWindow(QMainWindow):
         """重置播放器"""
 
         self.player.stop()
-        self.playBtn.setText('Play')
+        setPicture(play_jpg, 'play.jpg', self.playBtn)
         self.playerState = False
         self.hasWavFile = False
         self.playerHasMedia = False
@@ -961,7 +962,7 @@ class MainWindow(QMainWindow):
 
             # 设置播放按钮
             self.playBtn.setDisabled(False)
-            self.abortBtn.setDisabled(False)
+            self.stopBtn.setDisabled(False)
 
     # """------------------------------------------------------------------------------------------------------------"""
     """File-Export调用函数"""
