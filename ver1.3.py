@@ -9,7 +9,6 @@ ver1.3
 """
 
 import ctypes
-import os
 import sys
 import wave
 
@@ -19,7 +18,7 @@ import pywt
 from PyEMD import EMD, EEMD, CEEMDAN
 from PyQt5 import QtMultimedia
 from PyQt5.QtCore import QUrl
-from PyQt5.QtGui import QIcon, QColor, QTransform
+from PyQt5.QtGui import QColor, QTransform
 from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, QFileDialog, qApp, QMenu, QTabWidget, QTableWidget, \
     QAbstractItemView, QTableWidgetItem, QHeaderView, QTabBar, QWidget, QScrollArea, QScrollBar
 from matplotlib import pyplot as plt
