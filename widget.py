@@ -2,7 +2,7 @@
 
 from PyQt5.QtCore import QRegExp
 from PyQt5.QtGui import QRegExpValidator, QFont
-from PyQt5.QtWidgets import QLineEdit, QLabel, QComboBox, QCheckBox, QPushButton, QRadioButton
+from PyQt5.QtWidgets import QLineEdit, QLabel, QComboBox, QCheckBox, QPushButton, QRadioButton, QSpinBox
 from pyqtgraph import PlotWidget
 
 
@@ -65,6 +65,13 @@ class CheckBox(QCheckBox):
 
     def __init__(self, text):
         super(CheckBox, self).__init__(text)
+        self.setStyleSheet('font-size: 17px; font-family: "Times New Roman";')
+
+
+class SpinBox(QSpinBox):
+
+    def __init__(self):
+        super(SpinBox, self).__init__()
         self.setStyleSheet('font-size: 17px; font-family: "Times New Roman";')
 
 
