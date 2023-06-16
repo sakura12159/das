@@ -1,10 +1,8 @@
 """
-2023-6-16
-ver1.4
+2023-6-13
+ver1.3.1
 
 1.添加可递增递减通道号功能，并可在菜单中设置步长
-2.添加去趋势功能
-3.修复滤波器菜单更新数据菜单描述错误
 """
 
 import ctypes
@@ -22,7 +20,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, QFileDialog, qAp
     QAbstractItemView, QTableWidgetItem, QHeaderView, QTabBar, QWidget, QScrollArea, QScrollBar
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from scipy.signal import hilbert, filtfilt, spectrogram, detrend
+from scipy.signal import hilbert, filtfilt, spectrogram
 from scipy.signal.windows import *
 
 from filter import *
@@ -288,23 +286,6 @@ class MainWindow(QMainWindow):
 
         self.filter_menu.addSeparator()
 
-        # Filter-Detrend
-        self.detrend_menu = QMenu('Detrend', self.filter_menu)
-        self.detrend_menu.setStatusTip('Remove linear trend along axis from data')
-        self.filter_menu.addMenu(self.detrend_menu)
-
-        # Filter-Detrend-Linear
-        detrend_linear_action = QAction('Linear', self.detrend_menu)
-        detrend_linear_action.setStatusTip('The result of a linear least-squares fit to data is subtracted from data')
-        detrend_linear_action.triggered.connect(self.detrendData)
-        self.detrend_menu.addAction(detrend_linear_action)
-
-        # Filter-Detrend-Constant
-        detrend_constant_action = QAction('Constant', self.detrend_menu)
-        detrend_constant_action.setStatusTip('The mean of data is subtracted')
-        detrend_constant_action.triggered.connect(self.detrendData)
-        self.detrend_menu.addAction(detrend_constant_action)
-
         # Filter-EMD
         self.emd_menu = QMenu('EMD', self.filter_menu)
         self.emd_menu.setStatusTip('Use EMD etc. to decompose and reconstruct data')
@@ -333,7 +314,7 @@ class MainWindow(QMainWindow):
         # Filter-EMD-Plot Instantaneous Frequency
         self.emd_plot_ins_fre_action = QAction('Plot Instantaneous Frequency')
         self.emd_plot_ins_fre_action.setEnabled(False)
-        self.emd_plot_ins_fre_action.setStatusTip('Plots and shows instantaneous frequencies for provided IMF(s)')
+        self.emd_plot_ins_fre_action.setStatusTip('Plots and shows instantaneous frequencies for provided IMF(s).')
         self.emd_plot_ins_fre_action.triggered.connect(self.plotEMDInstantaneousFrequency)
         self.emd_menu.addAction(self.emd_plot_ins_fre_action)
 
@@ -1546,6 +1527,12 @@ class MainWindow(QMainWindow):
         dialog = QDialog()
         dialog.setWindowTitle('Window Options')
 
+        btn = PushButton('OK')
+        btn.clicked.connect(self.updateWindowOptionsParams)
+        btn.clicked.connect(self.plotSingleChannelTime)
+        btn.clicked.connect(self.plotAmplitudeFrequency)
+        btn.clicked.connect(dialog.close)
+
         window_method_label = Label('Window Method')
         self.window_method_combx = ComboBox()
         self.window_method_combx.addItems(self.window_methods.keys())
@@ -1560,12 +1547,6 @@ class MainWindow(QMainWindow):
         self.window_overlap_size_ratio_line_edit = NumPointLineEdit()
         self.window_overlap_size_ratio_line_edit.setText(str(self.window_overlap_size_ratio))
         self.window_overlap_size_ratio_line_edit.setToolTip('Overlap ratio between adjacent windows, between [0, 1)')
-
-        btn = PushButton('OK')
-        btn.clicked.connect(self.updateWindowOptionsParams)
-        btn.clicked.connect(self.plotSingleChannelTime)
-        btn.clicked.connect(self.plotAmplitudeFrequency)
-        btn.clicked.connect(dialog.close)
 
         hbox1 = QHBoxLayout()
         hbox2 = QHBoxLayout()
@@ -1608,71 +1589,14 @@ class MainWindow(QMainWindow):
     """Filter更新数据调用函数"""
 
     def updateFilteredData(self):
-        """变更更新数据菜单"""
+        """判断是否更新数据"""
 
         if self.if_update_data:
-            self.update_data_action.setText('Update Data(False)')
+            self.update_data_action.setText('Update Data(True)')
             self.if_update_data = False
         else:
-            self.update_data_action.setText('Update Data(True)')
+            self.update_data_action.setText('Update Data(False)')
             self.if_update_data = True
-
-    def ifUpdateData(self, flag, data):
-        """判断是否在滤波之后更新数据"""
-
-        if flag:
-            self.data[self.channel_number, :] = data
-            self.updateImages()
-
-    # """------------------------------------------------------------------------------------------------------------"""
-    """建立相位差和频谱图"""
-
-    def initTwoPlotWidgets(self, data, title):
-        """创建返回结合两个pw的Qwidget"""
-
-        x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
-                        self.current_sampling_times) / self.sampling_rate
-        if self.data_unit_index == 0:
-            data_widget = MyPlotWidget(f'{title}', 'Time(s)', 'Phase Difference(rad)', grid=True)
-        else:
-            data_widget = MyPlotWidget(f'{title}', 'Time(s)', 'Strain Rate(s^-1)', grid=True)
-
-        data_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
-                              self.sampling_times_to_num / self.sampling_rate)
-        data_widget.plot(x, data, pen=QColor('blue'))
-
-        data = toAmplitude(data, self.current_sampling_times)
-        x = np.arange(0, self.sampling_rate / 2, self.sampling_rate / self.current_sampling_times)
-        fre_amp_widget = MyPlotWidget('Amplitude - Frequency', 'Frequency(Hz)', 'Amplitude', grid=True)
-        fre_amp_widget.setXRange(0, self.sampling_rate / 2)
-        y = fixDateLength(self.current_sampling_times)
-        fre_amp_widget.plot(x, data[:y // 2], pen=QColor('blue'))
-
-        combine_widget = QWidget()
-        vbox = QVBoxLayout()
-        vbox.addWidget(data_widget)
-        vbox.addWidget(fre_amp_widget)
-        combine_widget.setLayout(vbox)
-
-        return combine_widget
-
-    # """------------------------------------------------------------------------------------------------------------"""
-    """Filter-Detrend调用函数"""
-
-    def detrendData(self):
-        """去趋势"""
-
-        data = self.data[self.channel_number, :]
-        detrend_type = self.detrend_menu.sender().text().lower()
-        data = detrend(data, type=detrend_type)
-
-        combine_widget = self.initTwoPlotWidgets(data, 'Detrend')
-
-        self.tab_widget.addTab(combine_widget,
-                               f'Detrend - type={detrend_type}\n'
-                               f'Channel Number={self.channel_number}')
-
-        self.ifUpdateData(self.if_update_data, data)
 
     # """------------------------------------------------------------------------------------------------------------"""
     """Filter-EMD调用函数"""
@@ -1767,11 +1691,33 @@ class MainWindow(QMainWindow):
                 imf_num = reconstruct_imf[i]
                 data += self.imfs_res[imf_num, :]  # 重构数据
 
-            combine_widget = self.initTwoPlotWidgets(data, self.emd_method + ' Reconstruct')
+            if self.data_unit_index == 0:
+                data_widget = MyPlotWidget(f'{self.emd_method} Reconstruct', 'Times', 'Phase Difference(rad)',
+                                           grid=True)
+            else:
+                data_widget = MyPlotWidget(f'{self.emd_method} Reconstruct', 'Times', 'Strain Rate(s^-1)', grid=True)
 
+            data_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
+                                  self.sampling_times_to_num / self.sampling_rate)
+            data_widget.plot(x, data, pen=QColor('blue'))
+
+            data = toAmplitude(data, self.current_sampling_times)
+            x = np.arange(0, self.sampling_rate / 2, self.sampling_rate / self.current_sampling_times)
+            fre_amp_widget = MyPlotWidget('Amplitude - Frequency Image', 'Frequency(Hz)', 'Amplitude', grid=True)
+            fre_amp_widget.setXRange(0, self.sampling_rate / 2)
+            y = fixDateLength(self.current_sampling_times)
+            fre_amp_widget.plot(x, data[:y // 2], pen=QColor('blue'))
+
+            vbox = QVBoxLayout()
+            combine_widget = QWidget()
+            vbox.addWidget(data_widget)
+            vbox.addWidget(fre_amp_widget)
+            combine_widget.setLayout(vbox)
             self.tab_widget.addTab(combine_widget, f'Reconstruct: Number of IMF={reconstruct_imf}')
 
-            self.ifUpdateData(self.if_update_data, data)
+            if self.if_update_data:
+                self.data[self.channel_number, :] = data
+                self.updateImages()
 
         self.emd_plot_ins_fre_action.setEnabled(True)
 
@@ -2028,8 +1974,34 @@ class MainWindow(QMainWindow):
         data = self.data[self.channel_number, :]
         data = filtfilt(self.filter.b, self.filter.a, data)  # 滤波
 
-        combine_widget = self.initTwoPlotWidgets(data, 'IIRFilter')
+        if self.if_update_data:
+            self.data[self.channel_number, :] = data
+            self.updateImages()
 
+        combine_widget = QWidget()
+        vbox = QVBoxLayout()
+
+        x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
+                        self.current_sampling_times) / self.sampling_rate
+        if self.data_unit_index == 0:
+            data_widget = MyPlotWidget('Phase Difference Image', 'Time(s)', 'Phase Difference(rad)', grid=True)
+        else:
+            data_widget = MyPlotWidget('Strain Rate Image', 'Time(s)', 'Strain Rate(s^-1)', grid=True)
+
+        data_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
+                              self.sampling_times_to_num / self.sampling_rate)
+        data_widget.plot(x, data, pen=QColor('blue'))
+
+        data = toAmplitude(data, self.current_sampling_times)
+        x = np.arange(0, self.sampling_rate / 2, self.sampling_rate / self.current_sampling_times)
+        fre_amp_widget = MyPlotWidget('Amplitude - Frequency Image', 'Frequency(Hz)', 'Amplitude', grid=True)
+        fre_amp_widget.setXRange(0, self.sampling_rate / 2)
+        y = fixDateLength(self.current_sampling_times)
+        fre_amp_widget.plot(x, data[:y // 2], pen=QColor('blue'))
+
+        vbox.addWidget(data_widget)
+        vbox.addWidget(fre_amp_widget)
+        combine_widget.setLayout(vbox)
         if hasattr(self.filter, 'method'):
             self.tab_widget.addTab(combine_widget,
                                    f'Filtered Image - Filter={self.filter.name}\n'
@@ -2039,8 +2011,6 @@ class MainWindow(QMainWindow):
             self.tab_widget.addTab(combine_widget,
                                    f'Filtered Image - Filter={self.filter.name}\n'
                                    f'Channel Number={self.channel_number}')
-
-        self.ifUpdateData(self.if_update_data, data)
 
     # """------------------------------------------------------------------------------------------------------------"""
     """Wavelet-Discrete Wavelet Transform菜单调用函数"""
@@ -2264,20 +2234,44 @@ class MainWindow(QMainWindow):
                                    f'Wavelet={self.wavelet_dwt_name_combx.currentText()}\t'
                                    f'Channel Number={self.channel_number}')
         else:
+            if self.data_unit_index == 0:
+                data_widget = MyPlotWidget('DWT Reconstruct', 'Time(s)', 'Phase Difference(rad)', grid=True)
+            else:
+                data_widget = MyPlotWidget('DWT Reconstruct', 'Time(s)', 'Strain Rate(s^-1)', grid=True)
+
+            x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
+                            self.current_sampling_times) / self.sampling_rate
+
             try:
                 data = pywt.waverec(coeffs, wavelet=self.wavelet_dwt_name_combx.currentText(),
                                     mode=self.wavelet_dwt_padding_mode_combx.currentText())  # 重构信号
             except Exception as err:
                 printError(err)
 
-            combine_widget = self.initTwoPlotWidgets(data, 'DWT Reconstruct')
+            data_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
+                                  self.sampling_times_to_num / self.sampling_rate)
+            data_widget.plot(x, data, pen=QColor('blue'))
 
+            data = toAmplitude(data, self.current_sampling_times)
+            x = np.arange(0, self.sampling_rate / 2, self.sampling_rate / self.current_sampling_times)
+            fre_amp_widget = MyPlotWidget('Amplitude - Frequency Image', 'Frequency(Hz)', 'Amplitude', grid=True)
+            fre_amp_widget.setXRange(0, self.sampling_rate / 2)
+            y = fixDateLength(self.current_sampling_times)
+            fre_amp_widget.plot(x, data[:y // 2], pen=QColor('blue'))
+
+            vbox = QVBoxLayout()
+            combine_widget = QWidget()
+            vbox.addWidget(data_widget)
+            vbox.addWidget(fre_amp_widget)
+            combine_widget.setLayout(vbox)
             self.tab_widget.addTab(combine_widget,
                                    f'DWT - Reconstruct: Coefficient={self.wavelet_dwt_reconstruct}\n'
                                    f'Wavelet={self.wavelet_dwt_name_combx.currentText()}\t'
                                    f'Channel Number={self.channel_number}')
 
-            self.ifUpdateData(self.if_update_data, data)
+            if self.if_update_data:
+                self.data[self.channel_number, :] = data
+                self.updateImages()
 
     def waveletThresholdDialog(self):
         """小波去噪"""
@@ -2343,14 +2337,39 @@ class MainWindow(QMainWindow):
         except Exception as err:
             printError(err)
 
-        combine_widget = self.initTwoPlotWidgets(data, 'Wavelet Threshold')
+        if self.if_update_data:
+            self.data[self.channel_number, :] = data
+            self.updateImages()
+
+        combine_widget = QWidget()
+        vbox = QVBoxLayout()
+
+        x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
+                        self.current_sampling_times) / self.sampling_rate
+        if self.data_unit_index == 0:
+            data_widget = MyPlotWidget('Phase Difference Image', 'Time(s)', 'Phase Difference(rad)', grid=True)
+        else:
+            data_widget = MyPlotWidget('Strain Rate Image', 'Time(s)', 'Strain Rate(s^-1)', grid=True)
+
+        data_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
+                              self.sampling_times_to_num / self.sampling_rate)
+        data_widget.plot(x, data, pen=QColor('blue'))
+
+        data = toAmplitude(data, self.current_sampling_times)
+        x = np.arange(0, self.sampling_rate / 2, self.sampling_rate / self.current_sampling_times)
+        fre_amp_widget = MyPlotWidget('Amplitude - Frequency Image', 'Frequency(Hz)', 'Amplitude', grid=True)
+        fre_amp_widget.setXRange(0, self.sampling_rate / 2)
+        y = fixDateLength(self.current_sampling_times)
+        fre_amp_widget.plot(x, data[:y // 2], pen=QColor('blue'))
+
+        vbox.addWidget(data_widget)
+        vbox.addWidget(fre_amp_widget)
+        combine_widget.setLayout(vbox)
 
         self.tab_widget.addTab(combine_widget,
                                f'Wavelet Thresholded Image - Threshold={self.wavelet_threshold}\n'
                                f'Threshold Type={self.wavelet_threshold_mode_combx.currentText()}\t'
                                f'Channel Number={self.channel_number}')
-
-        self.ifUpdateData(self.if_update_data, data)
 
     def waveletPacketsDialog(self):
         """小波包分解"""
@@ -2572,19 +2591,42 @@ class MainWindow(QMainWindow):
                                    f'Wavelet={self.wavelet_packets_name_combx.currentText()}\t'
                                    f'Channel Number={self.channel_number}')
         else:
+            if self.data_unit_index == 0:
+                data_widget = MyPlotWidget('Wavelet Packets Reconstruct', 'Time(s)', 'Phase Difference(rad)', grid=True)
+            else:
+                data_widget = MyPlotWidget('Wavelet Packets Reconstruct', 'Time(s)', 'Strain Rate(s^-1)', grid=True)
+
             try:
                 data = self.wavelet_packets_wp.reconstruct()  # 重构信号
             except Exception as err:
                 printError(err)
 
-            combine_widget = self.initTwoPlotWidgets(data, 'Wavelet Packets Reconstruct')
+            x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
+                            self.current_sampling_times) / self.sampling_rate
+            data_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
+                                  self.sampling_times_to_num / self.sampling_rate)
+            data_widget.plot(x, data, pen=QColor('blue'))
 
+            data = toAmplitude(data, self.current_sampling_times)
+            x = np.arange(0, self.sampling_rate / 2, self.sampling_rate / self.current_sampling_times)
+            fre_amp_widget = MyPlotWidget('Amplitude - Frequency Image', 'Frequency(Hz)', 'Amplitude', grid=True)
+            fre_amp_widget.setXRange(0, self.sampling_rate / 2)
+            y = fixDateLength(self.current_sampling_times)
+            fre_amp_widget.plot(x, data[:y // 2], pen=QColor('blue'))
+
+            vbox = QVBoxLayout()
+            combine_widget = QWidget()
+            vbox.addWidget(data_widget)
+            vbox.addWidget(fre_amp_widget)
+            combine_widget.setLayout(vbox)
             self.tab_widget.addTab(combine_widget,
                                    f'Wavelet Packets - Reconstruct: Subnodes={self.wavelet_packets_reconstruct}\n'
                                    f'Wavelet={self.wavelet_packets_name_combx.currentText()}\t'
                                    f'Channel Number={self.channel_number}')
 
-            self.ifUpdateData(self.if_update_data, data)
+            if self.if_update_data:
+                self.data[self.channel_number, :] = data
+                self.updateImages()
 
     # """------------------------------------------------------------------------------------------------------------"""
 
