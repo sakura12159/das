@@ -57,12 +57,12 @@ def printError(err):
     return
 
 
-def normalize(data):
-    """数据归一化"""
+def normalizeToGrayScale(data):
+    """数据归一化至0-255"""
 
-    normalized_data = (data - np.min(data)) / (np.max(data) - np.min(data))
-    normalized_data *= 255
-    return normalized_data
+    data = (data - np.min(data)) / (np.max(data) - np.min(data))
+    data *= 255
+    return data
 
 
 def toAmplitude(data, sampling_times):
