@@ -68,10 +68,10 @@ class MainWindow(QMainWindow):
     def initMenu(self):
         """初始化菜单"""
 
-        # 菜单栏中的File选项
+        # File
         file_menu = self.menu_bar.addMenu('File')
 
-        # Import子菜单
+        # Import
         import_action = QAction('Import', file_menu)
         import_action.setStatusTip('Import data file(s)')
         import_action.setShortcut('Ctrl+I')
@@ -88,18 +88,18 @@ class MainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
-        # Quit子菜单
+        # Quit
         quit_action = QAction('Quit', file_menu)
         quit_action.setStatusTip('Quit DAS_Visualizer')
         quit_action.setShortcut('Ctrl+Q')
         quit_action.triggered.connect(qApp.quit)
         file_menu.addAction(quit_action)
 
-        # 菜单栏中的Operation选项
+        # Operation
         self.operation_menu = self.menu_bar.addMenu('Operation')
         self.operation_menu.setEnabled(False)
 
-        # 计算给定位置信号信噪比
+        # Operation-Calculate SNR
         calculate_snr_action = QAction('Calculate SNR', self.operation_menu)
         calculate_snr_action.setStatusTip('Calculate SNR of the chosen segment')
         calculate_snr_action.triggered.connect(self.calculateSNRDialog)
@@ -107,13 +107,13 @@ class MainWindow(QMainWindow):
 
         self.operation_menu.addSeparator()
 
-        # 按采样次数裁剪数据范围
+        # Operation-Clip Data By Sampling Times
         clip_time_action = QAction('Clip Data By Sampling Times', self.operation_menu)
         clip_time_action.setStatusTip('Clip data within a certain range of sampling times')
         clip_time_action.triggered.connect(self.clipSamplingTimesDialog)
         self.operation_menu.addAction(clip_time_action)
 
-        # 按通道数裁剪数据
+        # Operation-Clip Data By Channels
         clip_channel_action = QAction('Clip Data By Channels', self.operation_menu)
         clip_channel_action.setStatusTip('Clip data within a certain range of channels')
         clip_channel_action.triggered.connect(self.clipChannelsDialog)
@@ -155,23 +155,23 @@ class MainWindow(QMainWindow):
         change_files_read_number_action.triggered.connect(self.changeFilesReadNumberDialog)
         self.operation_menu.addAction(change_files_read_number_action)
 
-        # Plot菜单
+        # Plot
         self.plot_menu = self.menu_bar.addMenu('Plot')
         self.plot_menu.setEnabled(False)
 
-        # 绘制二值图子菜单
+        # Plot-Plot Binary Image
         plot_binary_image_action = QAction('Plot Binary Image', self.plot_menu)
         plot_binary_image_action.setStatusTip('Set the threshold to plot binary image')
         plot_binary_image_action.triggered.connect(self.binaryImageDialog)
         self.plot_menu.addAction(plot_binary_image_action)
 
-        # 计算数据特征
+        # Plot-Plot Data Features
         self.plot_data_features_menu = QMenu('Plot Data Features', self.plot_menu)
         self.plot_data_features_menu.setStatusTip(
             'Calculate and plot time-domain & frequency-domain features of data')
         self.plot_menu.addMenu(self.plot_data_features_menu)
 
-        # 计算数据特征中的各子菜单
+        # Plot-Plot Data Features-Maximum Value etc.
         self.time_domain_chars_text = {'max_value': 'Maximum Value', 'peak_value': 'Peak Value',
                                        'min_value': 'Minimum Value', 'mean': 'Mean Value',
                                        'peak_peak_value': 'Peak-To-Peak Value',
@@ -274,13 +274,13 @@ class MainWindow(QMainWindow):
         plot_3d_ang_spectrum_action.triggered.connect(self.plot3dAngleSpectrum)
         plot_spectrum_menu.addAction(plot_3d_ang_spectrum_action)
 
-        # Plot-Window Options 子菜单
+        # Plot-Window Options
         window_options_action = QAction('Window Options', self.plot_menu)
         window_options_action.setStatusTip('Window parameters')
         window_options_action.triggered.connect(self.windowOptionsDialog)
         self.plot_menu.addAction(window_options_action)
 
-        # 菜单栏中的Filter菜单
+        # Filter
         self.filter_menu = self.menu_bar.addMenu('Filter')
         self.filter_menu.setEnabled(False)
 
@@ -451,7 +451,7 @@ class MainWindow(QMainWindow):
         self.tab_widget.setMovable(True)  # 设置tab可移动
         self.tab_widget.setStyleSheet('font-size: 15px; font-family: "Times New Roman";')
         self.tab_widget.setTabsClosable(True)  # 设置tab可关闭
-        self.tab_widget.tabCloseRequested[int].connect(self.removeTab)  # 设置关闭tab调用函数
+        self.tab_widget.tabCloseRequested[int].connect(self.removeTab)
         self.tab_widget.addTab(self.plot_channels_time_widget, 'Channels - Time')
         self.tab_widget.addTab(self.plot_gray_scale_image, 'Gray Scale')
         self.tab_widget.addTab(combine_image_widget, 'Single')
