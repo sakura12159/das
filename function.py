@@ -144,7 +144,7 @@ def calculateFrequencyDomainFeatures(data, sampling_rate):
 def twoPeaks(data):
     """双峰法求阈值"""
 
-    data = normalize(data)
+    data = normalizeToGrayScale(data)
     rows, cols = data.shape
 
     # 存储灰度直方图
@@ -178,7 +178,7 @@ def twoPeaks(data):
 def OSTU(data):
     """OSTU（大津）法"""
 
-    data = normalize(data)
+    data = normalizeToGrayScale(data)
     height = data.shape[0]
     width = data.shape[1]
     max_gray_scale = 0
