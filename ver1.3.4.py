@@ -3,6 +3,7 @@
 ver1.3.4
 
 1.将绘制多通道云图功能移动到Plot菜单中
+2.修改部分图名
 """
 
 import ctypes
@@ -427,18 +428,18 @@ class MainWindow(QMainWindow):
         pg.setConfigOption('foreground', 'k')  # 设置界面前背景色
 
         # 绘制灰度图
-        self.plot_gray_scale_image = MyPlotWidget('Gray Scale Image', 'Time(s)', 'Channel')
+        self.plot_gray_scale_image = MyPlotWidget('Gray Scale', 'Time(s)', 'Channel')
         self.plot_gray_scale_image.setXRange(0, 5)
         self.plot_gray_scale_image.setYRange(0, 200)
 
         # 绘制单通道相位差-时间图
-        self.plot_single_channel_time_widget = MyPlotWidget('Phase Difference Image', 'Time(s)',
+        self.plot_single_channel_time_widget = MyPlotWidget('Phase Difference', 'Time(s)',
                                                             'Phase Difference(rad)',
                                                             grid=True)
         self.plot_single_channel_time_widget.setXRange(0, 5)
 
         # 绘制频谱图
-        self.plot_amplitude_frequency_widget = MyPlotWidget('Amplitude - Frequency Image', 'Frequency(Hz)',
+        self.plot_amplitude_frequency_widget = MyPlotWidget('Amplitude - Frequency', 'Frequency(Hz)',
                                                             'Amplitude', grid=True)
         self.plot_amplitude_frequency_widget.setXRange(0, 500)
 
@@ -788,12 +789,12 @@ class MainWindow(QMainWindow):
                         self.current_sampling_times) / self.sampling_rate
         if self.data_unit_index == 0:
             self.plot_single_channel_time_widget.setTitle(
-                '<font face="Times New Roman" size="5">Phase Difference Image</font>')
+                '<font face="Times New Roman" size="5">Phase Difference</font>')
             self.plot_single_channel_time_widget.setLabel('left',
                                                           '<font face="Times New Roman">Phase Difference(rad)</font>')
         else:
             self.plot_single_channel_time_widget.setTitle(
-                '<font face="Times New Roman" size="5">Strain Rate Image</font>')
+                '<font face="Times New Roman" size="5">Strain Rate</font>')
             self.plot_single_channel_time_widget.setLabel('left',
                                                           '<font face="Times New Roman">Strain Rate(s^-1)</font>')
 
