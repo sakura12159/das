@@ -9,6 +9,7 @@ ver1.3.4
 import ctypes
 import sys
 import wave
+from itertools import cycle
 
 import pandas as pd
 import pyqtgraph as pg
@@ -1010,9 +1011,9 @@ class MainWindow(QMainWindow):
     def calculateSNRDialog(self):
         """计算信噪比对话框"""
 
-        dialog = QDialog()
-        dialog.setMaximumWidth(500)
-        dialog.setWindowTitle('Calculate SNR')
+        self.dialog = QDialog()
+        self.dialog.setMaximumWidth(500)
+        self.dialog.setWindowTitle('Calculate SNR')
 
         signal_channel_number_label = Label('Signal Channel Number')
         self.signal_channel_number_line_edit = OnlyNumLineEdit()
@@ -1081,8 +1082,8 @@ class MainWindow(QMainWindow):
         vbox.addSpacing(5)
         vbox.addWidget(btn)
 
-        dialog.setLayout(vbox)
-        dialog.exec_()
+        self.dialog.setLayout(vbox)
+        self.dialog.exec_()
 
     def updateCalculateSNRParams(self):
         """更新参数"""
@@ -1461,10 +1462,9 @@ class MainWindow(QMainWindow):
         plot_widget.setYRange(0, self.current_channels)
         x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
                         self.current_sampling_times) / self.sampling_rate
-        colors = ['red', 'lime', 'deepskyblue', 'yellow', 'plum', 'gold', 'blue', 'fuchsia', 'aqua', 'orange']
+        colors = cycle(['red', 'lime', 'deepskyblue', 'yellow', 'plum', 'gold', 'blue', 'fuchsia', 'aqua', 'orange'])
         for i in range(self.current_channels):
-            plot_widget.plot(x, self.data[i, :] + i,
-                             pen=QColor(colors[i - 10 * (i // 10)]))  # 根据通道数个位选择颜色绘图
+            plot_widget.plot(x, self.data[i, :] + i, pen=QColor(next(colors)))  # 根据通道数个位选择颜色绘图
         self.tab_widget.addTab(plot_widget, 'Channels - Time')
 
     # """------------------------------------------------------------------------------------------------------------"""
