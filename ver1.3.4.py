@@ -733,7 +733,7 @@ class MainWindow(QMainWindow):
         """创建当前数据的wav文件，储存在当前文件夹路径下"""
 
         if not self.hasWavFile:
-            data = np.array(self.data[self.channel_number, :])  # 不转array会在重复转换数据类型时发生数据类型错误
+            data = np.array(self.data[self.channel_number])  # 不转array会在重复转换数据类型时发生数据类型错误
 
             self.temp_wavfile = wave.open(os.path.join(self.file_path, 'temp.wav'), 'wb')  # 在放置数据的文件夹中创建一个临时文件
             self.temp_wavfile.setnchannels(1)  # 设置通道数
@@ -782,7 +782,7 @@ class MainWindow(QMainWindow):
 
         self.plot_single_channel_time_widget.clear()
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
 
         self.plot_single_channel_time_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
                                                        self.sampling_times_to_num / self.sampling_rate)
@@ -806,7 +806,7 @@ class MainWindow(QMainWindow):
 
         self.plot_amplitude_frequency_widget.clear()
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
 
         data = toAmplitude(data, self.current_sampling_times)
         x = np.arange(0, self.sampling_rate / 2, self.sampling_rate / self.current_sampling_times)
@@ -1236,7 +1236,7 @@ class MainWindow(QMainWindow):
 
         # 捕获索引错误等
         try:
-            self.data = self.data[self.channel_from_num:self.channel_to_num, :]
+            self.data = self.data[self.channel_from_num:self.channel_to_num]
         except Exception as err:
             printError(err)
 
@@ -1464,7 +1464,7 @@ class MainWindow(QMainWindow):
                         self.current_sampling_times) / self.sampling_rate
         colors = cycle(['red', 'lime', 'deepskyblue', 'yellow', 'plum', 'gold', 'blue', 'fuchsia', 'aqua', 'orange'])
         for i in range(self.current_channels):
-            plot_widget.plot(x, self.data[i, :] + i, pen=QColor(next(colors)))  # 根据通道数个位选择颜色绘图
+            plot_widget.plot(x, self.data[i] + i, pen=QColor(next(colors)))  # 根据通道数个位选择颜色绘图
         self.tab_widget.addTab(plot_widget, 'Channels - Time')
 
     # """------------------------------------------------------------------------------------------------------------"""
@@ -1474,9 +1474,9 @@ class MainWindow(QMainWindow):
         """将相位差转为应变率再积分"""
 
         if self.data_unit_index == 0:
-            data = convertDataUnit(self.data, self.sampling_rate, src='PD', aim='S')[self.channel_number, :]
+            data = convertDataUnit(self.data, self.sampling_rate, src='PD', aim='S')[self.channel_number]
         else:
-            data = convertDataUnit(self.data, self.sampling_rate, src='SR', aim='S')[self.channel_number, :]
+            data = convertDataUnit(self.data, self.sampling_rate, src='SR', aim='S')[self.channel_number]
 
         x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
                         self.current_sampling_times) / self.sampling_rate
@@ -1492,7 +1492,7 @@ class MainWindow(QMainWindow):
     def plotPSD(self):
         """绘制psd图线"""
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
         data = self.window_method(self.current_sampling_times) * data
         data = np.abs(np.fft.fft(data))
         y = fixDateLength(self.current_sampling_times)
@@ -1514,7 +1514,7 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(widget,
                                f'2D PSD - Window Method={self.window_text}\n'
                                f'Channel Number={self.channel_number}')
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
         ax = plt.axes()
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
@@ -1530,7 +1530,7 @@ class MainWindow(QMainWindow):
     def plot3dPSD(self):
         """绘制3dpsd"""
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
         figure = plt.figure()
         widget = FigureCanvas(figure)
         self.tab_widget.addTab(widget,
@@ -1556,7 +1556,7 @@ class MainWindow(QMainWindow):
     def plotMagnitudeSpectrum(self):
         """绘制幅度谱"""
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
         y = fixDateLength(self.current_sampling_times)
         data = self.window_method(self.current_sampling_times) * data
         data = 20.0 * np.log10(np.abs(np.fft.fft(data)) / self.current_sampling_times)[:y // 2]
@@ -1575,7 +1575,7 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(widget, f'2D Magnitude Spectrum - Window Method={self.window_text}\n'
                                        f'Channel Number={self.channel_number}')
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
         ax = plt.axes()
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
@@ -1591,7 +1591,7 @@ class MainWindow(QMainWindow):
     def plot3dMagnitudeSpectrum(self):
         """绘制3d幅度谱"""
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
         figure = plt.figure()
         widget = FigureCanvas(figure)
         self.tab_widget.addTab(widget, f'3D Magnitude Spectrum - Window Method={self.window_text}\n'
@@ -1613,7 +1613,7 @@ class MainWindow(QMainWindow):
     def plotAngleSpectrum(self):
         """绘制相位谱"""
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
         y = fixDateLength(self.current_sampling_times)
         data = self.window_method(self.current_sampling_times) * data
         data = np.angle(np.fft.fft(data))[:y // 2]
@@ -1632,7 +1632,7 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(widget, f'2D Angle Spectrum - Window Method={self.window_text}\n'
                                        f'Channel Number={self.channel_number}')
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
         ax = plt.axes()
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
@@ -1648,7 +1648,7 @@ class MainWindow(QMainWindow):
     def plot3dAngleSpectrum(self):
         """绘制3d相位谱"""
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
         figure = plt.figure()
         widget = FigureCanvas(figure)
         self.tab_widget.addTab(widget, f'3D Angle Spectrum - Window Method={self.window_text}\n'
@@ -1751,7 +1751,7 @@ class MainWindow(QMainWindow):
         """判断是否在滤波之后更新数据"""
 
         if flag:
-            self.data[self.channel_number, :] = data
+            self.data[self.channel_number] = data
             self.updateImages()
 
     # """------------------------------------------------------------------------------------------------------------"""
@@ -1792,7 +1792,7 @@ class MainWindow(QMainWindow):
     def detrendData(self):
         """去趋势"""
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
         detrend_type = self.detrend_menu.sender().text().lower()
         data = detrend(data, type=detrend_type)
 
@@ -1811,7 +1811,7 @@ class MainWindow(QMainWindow):
         """绘制emd分解图和重构图"""
 
         self.emd_method = self.emd_menu.sender().text()
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
 
         if self.data_unit_index == 1:  # 如果当前单位是应变率，数据较小需乘大一点
             data *= 10e6
@@ -1895,7 +1895,7 @@ class MainWindow(QMainWindow):
             data = np.zeros(self.imfs_res[0].shape)
             for i in range(len(reconstruct_imf) - 1):
                 imf_num = reconstruct_imf[i]
-                data += self.imfs_res[imf_num, :]  # 重构数据
+                data += self.imfs_res[imf_num]  # 重构数据
 
             combine_widget = self.initTwoPlotWidgets(data, self.emd_method + ' Reconstruct')
 
@@ -2100,7 +2100,7 @@ class MainWindow(QMainWindow):
             pw_list[i].setXRange(self.sampling_times_from_num / self.sampling_rate,
                                  self.sampling_times_to_num / self.sampling_rate)
             pw_list[i].setXLink(pw_list[0])
-            pw_list[i].plot(x, inst_freqs[i, :], pen=QColor('blue'))
+            pw_list[i].plot(x, inst_freqs[i], pen=QColor('blue'))
             pw_list[i].setFixedHeight(150)
             vbox.addWidget(pw_list[i])
         wgt.setLayout(vbox)
@@ -2155,7 +2155,7 @@ class MainWindow(QMainWindow):
     def plotIIRFilter(self):
         """绘制iir滤波器图"""
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
         data = filtfilt(self.filter.b, self.filter.a, data)  # 滤波
 
         combine_widget = self.initTwoPlotWidgets(data, 'IIRFilter')
@@ -2295,7 +2295,7 @@ class MainWindow(QMainWindow):
     def runWaveletDWT(self):
         """分解或重构"""
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
         if self.data_unit_index == 1:
             data *= 10e6
 
@@ -2464,7 +2464,7 @@ class MainWindow(QMainWindow):
     def plotWaveletThreshold(self):
         """绘制滤波后的图像"""
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
 
         try:
             data = pywt.threshold(data, value=self.wavelet_threshold,
@@ -2616,7 +2616,7 @@ class MainWindow(QMainWindow):
     def runWaveletPackets(self):
         """处理数据，绘图"""
 
-        data = self.data[self.channel_number, :]
+        data = self.data[self.channel_number]
         if self.data_unit_index == 1:
             data *= 10e6
 
