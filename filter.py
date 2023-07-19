@@ -59,7 +59,7 @@ class FilterI(object):
         self.checkbx.stateChanged.connect(self.resetCalculateParmas)
 
         # 计算区域组件
-        cal_label = Label('Calculate Order And Frequency:')
+        cal_label = Label('Calculate Order And Natural Frequency:')
         cal_label.setAlignment(Qt.AlignHCenter)
 
         wp_label = Label('Passband Edge Frequency(wp)')
@@ -96,7 +96,7 @@ class FilterI(object):
         self.gstop_le.setToolTip('The minimum attenuation in the stopband (dB)')
         self.gstop_le.textChanged.connect(self.resetCalculateParmas)
 
-        cal_order_label = Label('Order')
+        cal_order_label = Label('Order(N)')
         self.cal_order_le = OnlyNumLineEdit()
         self.cal_order_le.setFocusPolicy(Qt.NoFocus)
 
@@ -164,7 +164,7 @@ class FilterI(object):
         self.rs_le.setToolTip(
             'The minimum attenuation required in the stop band. Specified in decibels, as a positive number')
 
-        self.order_label = Label('Order')
+        self.order_label = Label('Order(N)')
         self.order_le = OnlyNumLineEdit()
         self.order_le.setText(str(self.order))
         self.order_le.setToolTip('The order of the filter')
@@ -199,6 +199,7 @@ class FilterI(object):
         hbox6.addWidget(self.Wn_label)
         hbox6.addWidget(self.Wn_le)
 
+        self.vbox.addSpacing(10)
         self.vbox.addWidget(self.filter_params_label)
         self.vbox.addSpacing(10)
         self.vbox.addLayout(hbox5)
@@ -304,7 +305,7 @@ class FilterI(object):
 
             self.cal_order_le.setText(str(self.cal_order))
             self.cal_Wn_le.setText(str(self.cal_Wn))
-            self.cal_btn.setText('Input Order And Wn')
+            self.cal_btn.setText('Input Order And Natural Frequency')
             self.flag = False
 
         else:
@@ -396,7 +397,7 @@ class FilterII(object):
 
         vbox.addSpacing(5)
         vbox.addWidget(filter_params_label)
-        vbox.addSpacing(5)
+        vbox.addSpacing(10)
         vbox.addLayout(hbox)
         vbox.addSpacing(5)
 

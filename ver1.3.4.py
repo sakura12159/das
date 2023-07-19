@@ -502,11 +502,11 @@ class MainWindow(QMainWindow):
 
         # 右侧
         # 参数
-        sampling_rate_lable = Label('Sampling Rate')
+        sampling_rate_label = Label('Sampling Rate')
         self.sampling_rate_line_edit = OnlyNumLineEdit()
         self.sampling_rate_line_edit.setFocusPolicy(Qt.NoFocus)
 
-        sampling_times_lable = Label('Sampling Times')
+        sampling_times_label = Label('Sampling Times')
         self.current_sampling_times_line_edit = OnlyNumLineEdit()
         self.current_sampling_times_line_edit.setFocusPolicy(Qt.NoFocus)
 
@@ -545,10 +545,10 @@ class MainWindow(QMainWindow):
         data_params_hbox.addSpacing(5)
         data_params_hbox.addWidget(self.stopBtn)
         data_params_hbox.addSpacing(20)
-        data_params_hbox.addWidget(sampling_rate_lable)
+        data_params_hbox.addWidget(sampling_rate_label)
         data_params_hbox.addWidget(self.sampling_rate_line_edit)
         data_params_hbox.addSpacing(5)
-        data_params_hbox.addWidget(sampling_times_lable)
+        data_params_hbox.addWidget(sampling_times_label)
         data_params_hbox.addWidget(self.current_sampling_times_line_edit)
         data_params_hbox.addSpacing(5)
         data_params_hbox.addWidget(number_of_channels_label)
