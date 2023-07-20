@@ -1,9 +1,9 @@
 """重写组件"""
-
-from PyQt5.QtCore import QRegExp
-from PyQt5.QtGui import QRegExpValidator, QFont
+import numpy as np
+from PyQt5.QtCore import QRegExp, Qt
+from PyQt5.QtGui import QRegExpValidator, QFont, QColor
 from PyQt5.QtWidgets import QLineEdit, QLabel, QComboBox, QCheckBox, QPushButton, QRadioButton, QSpinBox
-from pyqtgraph import PlotWidget
+import pyqtgraph as pg
 
 
 class Label(QLabel):
@@ -145,10 +145,10 @@ class SpinBox(QSpinBox):
 #         self.figure.canvas.draw_idle()  # 绘图动作实时反映在图像上
 
 
-class MyPlotWidget(PlotWidget):
-    """带字体的pw"""
+class MyPlotWidget(pg.PlotWidget):
+    """带字体、可显示数据"""
 
-    def __init__(self, title, xlabel, ylabel, grid=False):
+    def __init__(self, title, xlabel, ylabel, grid=False, image=False):
         super(MyPlotWidget, self).__init__()
         self.setTitle(f'<font face="Times New Roman" size="5">{title}</font>')
         self.setLabel('bottom', f'<font face="Times New Roman">{xlabel}</font>')
@@ -156,5 +156,85 @@ class MyPlotWidget(PlotWidget):
         self.getAxis('bottom').setTickFont(QFont('Times New Roman'))
         self.getAxis('left').setTickFont(QFont('Times New Roman'))
         self.getAxis('left').setWidth(50)
+        if not image:
+            self.initPlotItem(title, xlabel, ylabel, grid)
+
+    def initPlotItem(self, title, xlabel, ylabel, grid):
+        """初始化一个plotitem"""
+
+        self.plot_item = pg.PlotItem()
+        self.plot_item.setTitle(f'<font face="Times New Roman" size="5">{title}</font>')
+        self.plot_item.setLabel('bottom', f'<font face="Times New Roman">{xlabel}</font>')
+        self.plot_item.setLabel('left', f'<font face="Times New Roman">{ylabel}</font>')
+        self.plot_item.getAxis('bottom').setTickFont(QFont('Times New Roman'))
+        self.plot_item.getAxis('left').setTickFont(QFont('Times New Roman'))
+        self.plot_item.getAxis('left').setWidth(80)
         if grid:
-            self.showGrid(x=True, y=True, alpha=0.2)
+            self.plot_item.showGrid(x=True, y=True, alpha=0.2)
+        self.setCentralItem(self.plot_item)
+
+    def updateAxesRange(self):
+        """更新xy轴范围"""
+
+        self.data = np.array(self.plot_data_item.getData())  # 获取绘图数据
+        self.xmin, self.xmax = self.data[0].min(), self.data[0].max()
+        self.ymin, self.ymax = self.data[1].min(), self.data[1].max()
+        self.plot_item.setXRange(self.xmin, self.xmax)
+        self.plot_item.setYRange(self.ymin, self.ymax)
+
+    def plot(self, *args, **kwargs):
+        """重写父类函数，让plotwidget中的plotitem绘图"""
+
+        self.plot_data_item = self.plot_item.plot(*args, **kwargs)
+        self.updateAxesRange()
+        self.plot_item.scene().sigMouseMoved.connect(self.mouseMoved)  # 绘图之后绑定槽函数，否则会导致scene快速移动
+
+    def mouseMoved(self, pos):
+        """鼠标移动槽函数"""
+
+        if hasattr(self, 'text_item'):
+            self.plot_item.removeItem(self.text_item)
+            self.plot_item.removeItem(self.vertical_line)
+            self.plot_item.removeItem(self.horizontal_line)
+            self.plot_item.removeItem(self.scatter_plot_item)
+
+        # 数据标签
+        self.text_item = pg.TextItem(color=QColor('black'), border=pg.mkPen(QColor('black')),
+                                     fill=pg.mkBrush(QColor('yellow')))
+        self.text_item.setFont(QFont('Times New Roman', 10))
+        self.plot_item.addItem(self.text_item)
+
+        # 十字线
+        self.vertical_line = pg.InfiniteLine(angle=90, pen=pg.mkPen('black', width=0.5, style=Qt.DashLine),
+                                             movable=False)
+        self.horizontal_line = pg.InfiniteLine(angle=0, pen=pg.mkPen('black', width=0.5, style=Qt.DashLine),
+                                               movable=False)
+        self.plot_item.addItem(self.vertical_line, ignoreBounds=True)
+        self.plot_item.addItem(self.horizontal_line, ignoreBounds=True)
+
+        # 数据点
+        self.scatter_plot_item = pg.ScatterPlotItem()
+        self.plot_item.addItem(self.scatter_plot_item)
+
+        # 设置各item位置
+        vb = self.plot_item.vb
+        if self.plot_item.sceneBoundingRect().contains(pos):
+            mouse_point = vb.mapSceneToView(pos)
+            x = float(mouse_point.x())
+            if self.xmin <= x <= self.xmax:
+                index = self.searchPointIndex(x)
+                try:
+                    self.scatter_plot_item.setData(pos=[[x, self.data[1][index]]], size=10, pen=QColor('red'))
+                except Exception:
+                    pass
+                self.text_item.setText(f'x: {x}\ny: {self.data[1][index]}')
+                self.text_item.setPos(x, self.data[1][index])
+                self.vertical_line.setPos(x)
+                self.horizontal_line.setPos(self.data[1][index])
+
+    def searchPointIndex(self, xpos):
+        """寻找x坐标附近的点，返回该点的索引"""
+
+        for i in range(len(self.data[0])):
+            if (xpos - self.data[0][i]) / (self.data[0][i] + 10e-10) < 10e-10:
+                return i
