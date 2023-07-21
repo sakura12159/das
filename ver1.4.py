@@ -1,10 +1,11 @@
 """
-2023-7-20
+2023-7-21
 ver1.4
 
 1.添加数据显示功能
 2.修复连续裁剪的错误
 3.修复滤波器类型更新错误
+4.修复文件读取错误
 """
 
 import ctypes
@@ -836,11 +837,10 @@ class MainWindow(QMainWindow):
     def changeFilePath(self):
         """更改显示的文件路径"""
 
-        self.file_path = QFileDialog.getExistingDirectory(self, "Select File Path", "C:/")  # 起始路径
-        if self.file_path != '':
+        file_path = QFileDialog.getExistingDirectory(self, 'Select File Path', '')  # 起始路径
+        if file_path != '':
+            self.file_path = file_path
             self.updateFile()
-        else:
-            del self.file_path
 
     def selectDataFromTable(self):
         """当从文件列表中选择文件时更新图像等"""
@@ -945,8 +945,7 @@ class MainWindow(QMainWindow):
     def importData(self):
         """导入多个数据文件后绘制各种图"""
 
-        self.file_name = QFileDialog.getOpenFileNames(self, 'Import', '', 'DAS data (*.dat)')  # 打开多个.dat文件
-        self.file_name = self.file_name[0]
+        self.file_name = QFileDialog.getOpenFileNames(self, 'Import', '', 'DAS data (*.dat)')[0]  # 打开多个.dat文件
         if self.file_name != []:
             self.file_path = os.path.dirname(str(self.file_name[0]))
 
