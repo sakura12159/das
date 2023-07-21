@@ -257,6 +257,8 @@ class FilterI(object):
     def update(self):
         """更新滤波器参数"""
 
+        self.method = self.combx.currentText()
+
         self.wp = self.wp_le.text()
 
         self.ws = self.ws_le.text()
