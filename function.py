@@ -97,7 +97,7 @@ def calculateTimeDomainFeatures(data):
     square_root_amplitude = (np.sum(np.sqrt(abs(data)), axis=1) / cols) ** 2  # 方根幅值
     variance = np.var(data, axis=1)  # 方差
     standard_deviation = np.std(data, axis=1)  # 标准差
-    kurtosis = stats.kurtosis(data, axis=1)  # 峭度
+    kurtosis = stats.kurtosis(data, axis=1, fisher=False)  # 峭度
     skewness = stats.skew(data, axis=1)  # 偏度
     # 无量纲统计量
     clearance_factor = peak_value / square_root_amplitude  # 裕度指标

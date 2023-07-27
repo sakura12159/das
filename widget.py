@@ -176,9 +176,9 @@ class MyPlotWidget(pg.PlotWidget):
     def updateAxesRange(self):
         """更新xy轴范围"""
 
-        self.data = np.array(self.plot_data_item.getData())  # 获取绘图数据
-        self.xmin, self.xmax = self.data[0].min(), self.data[0].max()
-        self.ymin, self.ymax = self.data[1].min(), self.data[1].max()
+        self.data = np.nan_to_num(np.array(self.plot_data_item.getData()))  # 获取绘图数据，并把其中可能存在的nan值替换为0
+        self.xmin, self.xmax = np.min(self.data[0]), np.max(self.data[0])
+        self.ymin, self.ymax = np.min(self.data[1]), np.max(self.data[1])
         self.plot_item.setXRange(self.xmin, self.xmax)
         self.plot_item.setYRange(self.ymin, self.ymax)
 
