@@ -88,13 +88,13 @@ def calculateTimeDomainFeatures(data):
 
     # 有量纲统计量
     max_value = np.amax(data, axis=1)  # 最大值
-    peak_value = np.amax(abs(data), axis=1)  # 最大绝对值
+    peak_value = np.amax(np.abs(data), axis=1)  # 最大绝对值
     min_value = np.amin(data, axis=1)  # 最小值
     mean = np.mean(data, axis=1)  # 均值
     peak_peak_value = max_value - min_value  # 峰峰值
-    mean_absolute_value = np.mean(abs(data), axis=1)  # 绝对平均值
+    mean_absolute_value = np.mean(np.abs(data), axis=1)  # 绝对平均值
     root_mean_square = np.sqrt(np.sum(data ** 2, axis=1) / cols)  # 均方根值
-    square_root_amplitude = (np.sum(np.sqrt(abs(data)), axis=1) / cols) ** 2  # 方根幅值
+    square_root_amplitude = (np.sum(np.sqrt(np.abs(data)), axis=1) / cols) ** 2  # 方根幅值
     variance = np.var(data, axis=1)  # 方差
     standard_deviation = np.std(data, axis=1)  # 标准差
     kurtosis = stats.kurtosis(data, axis=1, fisher=False)  # 峭度
@@ -117,9 +117,9 @@ def calculateFrequencyDomainFeatures(data, sampling_rate):
     """计算频域特征"""
 
     data_fft = np.fft.fft(data, axis=1)
-    m, n = data_fft.shape  # 样本个数 和 信号长度
+    m, n = data_fft.shape  # 样本个数和信号长度
 
-    # 傅里叶变换是对称的，只需取前半部分数据，否则由于 频率序列 是 正负对称的，会导致计算 重心频率求和 等时正负抵消
+    # 傅里叶变换是对称的，只需取前半部分数据，否则由于频率序列是正负对称的，会导致计算重心频率求和时正负抵消
     mag = np.abs(data_fft)[:, :n // 2]  # 信号幅值
     freq = np.fft.fftfreq(n, 1 / sampling_rate)[:n // 2]
 

@@ -1,10 +1,11 @@
 """
-2023-7-27
+2023-7-30
 ver1.4.1
 
 1.修改播放声音错误
 2.求峭度时使用Pearson定义
 3.修改求最大最小值时数据中出现nan导致的错误
+4.修改裁剪数据时索引越界的错误
 """
 
 import ctypes
@@ -972,8 +973,7 @@ class MainWindow(QMainWindow):
             self.sampling_rate = sampling_rate
             self.sampling_times = sampling_times * len(self.file_name)
             self.current_channels = channels_num
-            self.origin_data = data
-            self.data = self.origin_data
+            self.data, self.origin_data = data, data
             self.time = time
 
             # 设置播放按钮
@@ -1170,7 +1170,8 @@ class MainWindow(QMainWindow):
 
         # 捕获索引错误等
         try:
-            self.data = self.origin_data[:, self.sampling_times_from_num:self.sampling_times_to_num]
+            self.data = self.origin_data[self.channel_from_num:self.channel_to_num,
+                        self.sampling_times_from_num:self.sampling_times_to_num]
         except Exception as err:
             printError(err)
 
@@ -1233,7 +1234,8 @@ class MainWindow(QMainWindow):
 
         # 捕获索引错误等
         try:
-            self.data = self.origin_data[self.channel_from_num:self.channel_to_num]
+            self.data = self.origin_data[self.channel_from_num:self.channel_to_num,
+                        self.sampling_times_from_num:self.sampling_times_to_num]
         except Exception as err:
             printError(err)
 
@@ -1748,7 +1750,8 @@ class MainWindow(QMainWindow):
         """判断是否在滤波之后更新数据"""
 
         if flag:
-            self.data[self.channel_number] = data
+            self.origin_data[self.channel_number] = data
+            self.data = self.origin_data
             self.updateImages()
 
     # """------------------------------------------------------------------------------------------------------------"""
@@ -2111,7 +2114,8 @@ class MainWindow(QMainWindow):
     def iirCalculateFilterParams(self):
         """计算滤波器阶数和自然频率"""
 
-        if not hasattr(self, 'filter') or self.filter.name != self.iir_menu.sender().text():  # 如果没有操作过或两次选择的滤波器不同
+        if not hasattr(self,
+                       'filter') or self.filter.filter_name != self.iir_menu.sender().text():  # 如果没有操作过或两次选择的滤波器不同
             self.filter = FilterI(self.iir_menu.sender().text())
 
             dialog_layout = QVBoxLayout()
@@ -2130,7 +2134,7 @@ class MainWindow(QMainWindow):
     def iirDesignBesselFilter(self):
         """设计Bessel/Thomson滤波器"""
 
-        if not hasattr(self, 'filter') or self.filter.name != 'Bessel/Thomson':
+        if not hasattr(self, 'filter') or self.filter.filter_name != 'Bessel/Thomson':
             self.filter = FilterI('Bessel/Thomson')
 
             self.filter.btn.clicked.connect(self.plotIIRFilter)
@@ -2141,7 +2145,7 @@ class MainWindow(QMainWindow):
     def iirDesignCombFilter(self):
         """设计comb类滤波器"""
 
-        if not hasattr(self, 'filter') or self.filter.name != self.iir_menu.sender().text():
+        if not hasattr(self, 'filter') or self.filter.filter_name != self.iir_menu.sender().text():
             self.filter = FilterII(self.iir_menu.sender().text())
 
             self.filter.btn.clicked.connect(self.plotIIRFilter)
@@ -2159,12 +2163,12 @@ class MainWindow(QMainWindow):
 
         if hasattr(self.filter, 'method'):
             self.tab_widget.addTab(combine_widget,
-                                   f'Filtered Image - Filter={self.filter.name}\n'
+                                   f'Filtered Image - Filter={self.filter.filter_name}\n'
                                    f'Method={self.filter.method}\t'
                                    f'Channel Number={self.channel_number}')
         else:
             self.tab_widget.addTab(combine_widget,
-                                   f'Filtered Image - Filter={self.filter.name}\n'
+                                   f'Filtered Image - Filter={self.filter.filter_name}\n'
                                    f'Channel Number={self.channel_number}')
 
         self.ifUpdateData(self.if_update_data, data)

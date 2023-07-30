@@ -2,7 +2,6 @@
 
 import re
 
-from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QDialog
 from scipy.signal import iircomb, iirnotch, iirpeak, cheby2, bessel, ellip, cheby1, butter, buttord, cheb1ord, cheb2ord, \
     ellipord
@@ -14,13 +13,13 @@ from widget import *
 class FilterI(object):
     """滤波器相关的类"""
 
-    def __init__(self, name):
+    def __init__(self, filter_name):
         """滤波器的一些参数"""
 
-        self.names = {'Butterworth': butter, 'Chebyshev type I': cheby1, 'Chebyshev type II': cheby2,
+        self.filter_names = {'Butterworth': butter, 'Chebyshev type I': cheby1, 'Chebyshev type II': cheby2,
                       'Elliptic (Cauer)': ellip, 'Bessel/Thomson': bessel}
-        self.name = name
-        self.filter = self.names[name]
+        self.filter_name = filter_name
+        self.filter = self.filter_names[filter_name]
         self.order = 4
         self.Wn = 0.02
         self.btype = ['lowpass', 'highpass', 'bandpass', 'bandstop']
@@ -44,7 +43,7 @@ class FilterI(object):
         """初始化对话框"""
 
         self.dialog = QDialog()
-        self.dialog.setWindowTitle(f'{self.name} Filter')
+        self.dialog.setWindowTitle(f'{self.filter_name} Filter')
 
         self.combx_label = Label('Filter Type')
         self.combx = ComboBox()
@@ -346,13 +345,13 @@ class FilterI(object):
 class FilterII(object):
     """滤波器相关的类"""
 
-    def __init__(self, name):
+    def __init__(self, filter_name):
         """滤波器一些参数"""
 
-        self.names = {'Notch Digital Filter': iirnotch, 'Peak (Resonant) Digital Filter': iirpeak,
+        self.filter_names = {'Notch Digital Filter': iirnotch, 'Peak (Resonant) Digital Filter': iirpeak,
                       'Notching or Peaking Digital Comb Filter': iircomb}
-        self.name = name
-        self.filter = self.names[name]
+        self.filter_name = filter_name
+        self.filter = self.filter_names[filter_name]
         self.w0 = 0.5
         self.Q = 30
         self.fs = 2.0
@@ -365,7 +364,7 @@ class FilterII(object):
         """初始化对话框"""
 
         self.dialog = QDialog()
-        self.dialog.setWindowTitle(f'{self.name} Filter')
+        self.dialog.setWindowTitle(f'{self.filter_name} Filter')
 
         filter_params_label = Label('Filter Parameters')
         filter_params_label.setAlignment(Qt.AlignHCenter)
