@@ -5,7 +5,7 @@ import os
 
 import numpy as np
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QAction, QMenu
 from scipy import stats, integrate
 
 
@@ -54,7 +54,32 @@ def printError(err):
 
     msgbx = QMessageBox.warning(None, 'Error Warning', f'<font face="Times New Roman" size="4">{err}</font>!',
                                 QMessageBox.Ok)
+
     return
+
+
+def createMenu(text, parent, status_tip=None, enable=True):
+    """创建菜单"""
+
+    menu = QMenu(text, parent)
+    menu.setStatusTip(status_tip)
+    parent.addMenu(menu)
+    if not enable:
+        menu.setEnabled(False)
+
+    return menu
+
+
+def createAction(text, parent, status_tip, connect_func, short_cut=0):
+    """创建动作菜单"""
+
+    action = QAction(text, parent)
+    action.setStatusTip(status_tip)
+    action.setShortcut(short_cut)
+    action.triggered.connect(connect_func)
+    parent.addAction(action)
+
+    return action
 
 
 def normalizeToGrayScale(data):
@@ -62,6 +87,7 @@ def normalizeToGrayScale(data):
 
     data = (data - np.min(data)) / (np.max(data) - np.min(data))
     data *= 255
+
     return data
 
 
@@ -70,6 +96,7 @@ def toAmplitude(data, sampling_times):
 
     data = np.abs(np.fft.fft(data)) / sampling_times
     data[1:len(data) // 2] *= 2
+
     return data
 
 
@@ -78,6 +105,7 @@ def fixDateLength(sampling_times):
 
     if sampling_times % 2 == 1:
         sampling_times += 1
+
     return sampling_times
 
 
@@ -106,9 +134,12 @@ def calculateTimeDomainFeatures(data):
     crest_factor = peak_value / root_mean_square  # 峰值指标
     kurtosis_factor = kurtosis / (root_mean_square ** 4)  # 峭度指标
 
-    features = [max_value, peak_value, min_value, mean, peak_peak_value, mean_absolute_value, root_mean_square,
-                square_root_amplitude, variance, standard_deviation, kurtosis, skewness, clearance_factor,
-                shape_factor, impulse_factor, crest_factor, kurtosis_factor]
+    features = {'Maximum Value': max_value, 'Peak Value': peak_value, 'Minimum Value': min_value, 'Mean Value': mean,
+                'Peak-To-Peak Value': peak_peak_value, 'Mean-Absolute Value': mean_absolute_value,
+                'Root-Mean-Square': root_mean_square, 'Square-Root-Amplitude': square_root_amplitude,
+                'Variance': variance, 'Standard-Deviation': standard_deviation, 'Kurtosis': kurtosis,
+                'Skewness': skewness, 'Clearance Factor': clearance_factor, 'Shape Factor': shape_factor,
+                'Impulse Factor': impulse_factor, 'Crest Factor': crest_factor, 'Kurtosis Factor': kurtosis_factor}
 
     return features
 
@@ -135,8 +166,10 @@ def calculateFrequencyDomainFeatures(data, sampling_rate):
     frequency_variance = np.sum(np.square(freq_tile - fc_tile) * ps, axis=1) / np.sum(ps, axis=1)  # 频率方差
     frequency_standard_deviation = np.sqrt(frequency_variance)  # 频率标准差
 
-    features = [centroid_frequency, mean_frequency, root_mean_square_frequency, frequency_variance,
-                mean_square_frequency, frequency_standard_deviation]
+    features = {'Centroid Frequency': centroid_frequency, 'Mean Frequency': mean_frequency,
+                'Root-Mean-Square Frequency': root_mean_square_frequency, 'Frequency Variance': frequency_variance,
+                'Mean-Square Frequency': mean_square_frequency,
+                'Frequency Standard-Deviation': frequency_standard_deviation}
 
     return features
 
@@ -172,6 +205,7 @@ def twoPeaks(data):
         temp_val = gray_scale_hist[int(first_peak):int(second_peak)]
         min_gray_scale_location = np.where(temp_val == np.min(temp_val))
         threshold = first_peak + min_gray_scale_location[0][0] + 1
+
     return threshold
 
 
@@ -195,6 +229,7 @@ def OSTU(data):
         if otsu > max_gray_scale:
             max_gray_scale = otsu
             threshold = i
+
     return threshold
 
 
@@ -203,17 +238,23 @@ def convertDataUnit(data, sr, src, aim):
 
     if src == 'PD':
         if aim == 'SR':
+
             return data * 11.6e-9 * sr
+
         elif aim == 'S':
             data = data * 11.6e-9 * sr
             x = data.shape[1]
             x = np.linspace(0, x, x)
+
             return integrate.cumtrapz(data, x, initial=0) * 10e6
 
     elif src == 'SR':
         if aim == 'PD':
+
             return data / 11.6e-9 / sr
+
         elif aim == 'S':
             x = data.shape[1]
             x = np.linspace(0, x, x)
+
             return integrate.cumtrapz(data, x, initial=0) * 10e6

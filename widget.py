@@ -148,8 +148,10 @@ class SpinBox(QSpinBox):
 class MyPlotWidget(pg.PlotWidget):
     """带字体、可显示数据"""
 
-    def __init__(self, title, xlabel, ylabel, grid=False, image=False):
+    def __init__(self, title, xlabel, ylabel, grid=False, image=False, clear_plot=True):
         super(MyPlotWidget, self).__init__()
+        self.image = image
+        self.clear_plot = clear_plot
         self.setTitle(f'<font face="Times New Roman" size="5">{title}</font>')
         self.setLabel('bottom', f'<font face="Times New Roman">{xlabel}</font>')
         self.setLabel('left', f'<font face="Times New Roman">{ylabel}</font>')
@@ -182,12 +184,16 @@ class MyPlotWidget(pg.PlotWidget):
         self.plot_item.setXRange(self.xmin, self.xmax)
         self.plot_item.setYRange(self.ymin, self.ymax)
 
-    def plot(self, *args, **kwargs):
-        """重写父类函数，让plotwidget中的plotitem绘图"""
+    def draw(self, *args, **kwargs):
+        """让plotwidget中的plotitem绘图"""
+
+        if self.clear_plot:
+            self.plot_item.clear()
 
         self.plot_data_item = self.plot_item.plot(*args, **kwargs)
-        self.updateAxesRange()
-        self.plot_item.scene().sigMouseMoved.connect(self.mouseMoved)  # 绘图之后绑定槽函数，否则会导致scene快速移动
+        if self.image:
+            self.updateAxesRange()
+            self.plot_item.scene().sigMouseMoved.connect(self.mouseMoved)  # 绘图之后绑定槽函数，否则会导致scene快速移动
 
     def mouseMoved(self, pos):
         """鼠标移动槽函数"""
