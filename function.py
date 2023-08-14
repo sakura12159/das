@@ -9,19 +9,19 @@ from PyQt5.QtWidgets import QMessageBox, QAction, QMenu
 from scipy import stats, integrate
 
 
-def picture2py(py_name):
+def picture2py(pic_name):
     """将图像文件转换为py文件"""
 
     write_data = []
     for picture_name in os.listdir('Image/'):
         filename = picture_name.replace('.', '_')
-        open_pic = open(os.path.join('Image/', "%s" % picture_name), 'rb')
+        open_pic = open(os.path.join('Image/', picture_name), 'rb')
         b64str = base64.b64encode(open_pic.read())
         open_pic.close()
         # 注意这边b64str一定要加上.decode()
-        write_data.append('%s = "%s"\n' % (filename, b64str.decode()))
+        write_data.append('{} = "{}"\n'.format(filename, b64str.decode()))
 
-    f = open('%s.py' % py_name, 'w+')
+    f = open('{}.py'.format(pic_name), 'w+')
     for data in write_data:
         f.write(data)
     f.close()
@@ -35,14 +35,13 @@ def getPicture(pic_code, pic_name):
     image.close()
 
 
-def setPicture(picture, picture_name, widget, setWhite=True):
+def setPicture(picture, picture_name, widget):
     """设置图片"""
 
     getPicture(picture, picture_name)  # 从image.py中获取图片信息生成图片
     widget.setIcon(QIcon(picture_name))  # 加载图片
     os.remove(picture_name)  # 移除图片释放内存
-    if setWhite:
-        widget.setStyleSheet('background-color: rgb(255, 255, 255)')
+    widget.setStyleSheet('background: white')
 
 
 if __name__ == '__main__':
@@ -58,14 +57,13 @@ def printError(err):
     return
 
 
-def createMenu(text, parent, status_tip=None, enable=True):
+def createMenu(text, parent, status_tip=None, enabled=True):
     """创建菜单"""
 
     menu = QMenu(text, parent)
     menu.setStatusTip(status_tip)
     parent.addMenu(menu)
-    if not enable:
-        menu.setEnabled(False)
+    menu.setEnabled(enabled)
 
     return menu
 
@@ -83,7 +81,7 @@ def createAction(text, parent, status_tip, connect_func, short_cut=0):
 
 
 def normalizeToGrayScale(data):
-    """数据归一化至0-255"""
+    """数据标准化至0-255"""
 
     data = (data - np.min(data)) / (np.max(data) - np.min(data))
     data *= 255
@@ -148,22 +146,24 @@ def calculateFrequencyDomainFeatures(data, sampling_rate):
     """计算频域特征"""
 
     data_fft = np.fft.fft(data, axis=1)
-    m, n = data_fft.shape  # 样本个数和信号长度
+    channel_num, data_length = data_fft.shape  # 样本个数和信号长度
 
     # 傅里叶变换是对称的，只需取前半部分数据，否则由于频率序列是正负对称的，会导致计算重心频率求和时正负抵消
-    mag = np.abs(data_fft)[:, :n // 2]  # 信号幅值
-    freq = np.fft.fftfreq(n, 1 / sampling_rate)[:n // 2]
+    magnitude = np.abs(data_fft)[:, :data_length // 2]  # 信号幅值
+    frequency = np.fft.fftfreq(data_length, 1 / sampling_rate)[:data_length // 2]
 
-    ps = mag ** 2 / n  # 功率谱
+    power_spectrum = magnitude ** 2 / data_length  # 功率谱
 
-    centroid_frequency = np.sum(freq * ps, axis=1) / np.sum(ps, axis=1)  # 重心频率
-    mean_frequency = np.mean(ps, axis=1)  # 平均频率
-    mean_square_frequency = np.sum(ps * np.square(freq), axis=1) / np.sum(ps, axis=1)  # 均方频率
+    centroid_frequency = np.sum(frequency * power_spectrum, axis=1) / np.sum(power_spectrum, axis=1)  # 重心频率
+    mean_frequency = np.mean(power_spectrum, axis=1)  # 平均频率
+    mean_square_frequency = np.sum(power_spectrum * np.square(frequency), axis=1) / np.sum(power_spectrum,
+                                                                                           axis=1)  # 均方频率
     root_mean_square_frequency = np.sqrt(mean_square_frequency)  # 均方根频率
 
-    freq_tile = np.tile(freq.reshape(1, -1), (m, 1))  # 复制 m 行
-    fc_tile = np.tile(centroid_frequency.reshape(-1, 1), (1, freq_tile.shape[1]))  # 复制 列，与 freq_tile 的列数对应
-    frequency_variance = np.sum(np.square(freq_tile - fc_tile) * ps, axis=1) / np.sum(ps, axis=1)  # 频率方差
+    freq_tile = np.tile(frequency.reshape(1, -1), (channel_num, 1))  # 复制 channel_num 行
+    fc_tile = np.tile(centroid_frequency.reshape(-1, 1), (1, freq_tile.shape[1]))  # 复制列，与freq_tile的列数对应
+    frequency_variance = np.sum(np.square(freq_tile - fc_tile) * power_spectrum, axis=1) / np.sum(power_spectrum,
+                                                                                                  axis=1)  # 频率方差
     frequency_standard_deviation = np.sqrt(frequency_variance)  # 频率标准差
 
     features = {'Centroid Frequency': centroid_frequency, 'Mean Frequency': mean_frequency,
@@ -213,8 +213,7 @@ def OSTU(data):
     """OSTU（大津）法"""
 
     data = normalizeToGrayScale(data)
-    height = data.shape[0]
-    width = data.shape[1]
+    height, width = data.shape
     max_gray_scale = 0
     # 遍历每一个灰度层
     for i in range(255):

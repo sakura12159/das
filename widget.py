@@ -148,17 +148,16 @@ class SpinBox(QSpinBox):
 class MyPlotWidget(pg.PlotWidget):
     """带字体、可显示数据"""
 
-    def __init__(self, title, xlabel, ylabel, grid=False, image=False, clear_plot=True):
+    def __init__(self, title, xlabel, ylabel, grid=False, check_mouse=True):
         super(MyPlotWidget, self).__init__()
-        self.image = image
-        self.clear_plot = clear_plot
+        self.check_mouse = check_mouse
         self.setTitle(f'<font face="Times New Roman" size="5">{title}</font>')
         self.setLabel('bottom', f'<font face="Times New Roman">{xlabel}</font>')
         self.setLabel('left', f'<font face="Times New Roman">{ylabel}</font>')
         self.getAxis('bottom').setTickFont(QFont('Times New Roman'))
         self.getAxis('left').setTickFont(QFont('Times New Roman'))
         self.getAxis('left').setWidth(50)
-        if not image:
+        if check_mouse:
             self.initPlotItem(title, xlabel, ylabel, grid)
 
     def initPlotItem(self, title, xlabel, ylabel, grid):
@@ -187,13 +186,12 @@ class MyPlotWidget(pg.PlotWidget):
     def draw(self, *args, **kwargs):
         """让plotwidget中的plotitem绘图"""
 
-        if self.clear_plot:
-            self.plot_item.clear()
-
-        self.plot_data_item = self.plot_item.plot(*args, **kwargs)
-        if self.image:
+        if self.check_mouse:
+            self.plot_data_item = self.plot_item.plot(*args, **kwargs)
             self.updateAxesRange()
             self.plot_item.scene().sigMouseMoved.connect(self.mouseMoved)  # 绘图之后绑定槽函数，否则会导致scene快速移动
+        else:
+            self.plot(*args, **kwargs)
 
     def mouseMoved(self, pos):
         """鼠标移动槽函数"""
@@ -226,21 +224,22 @@ class MyPlotWidget(pg.PlotWidget):
         vb = self.plot_item.vb
         if self.plot_item.sceneBoundingRect().contains(pos):
             mouse_point = vb.mapSceneToView(pos)
-            x = float(mouse_point.x())
-            if self.xmin <= x <= self.xmax:
-                index = self.searchPointIndex(x)
-                try:
-                    self.scatter_plot_item.setData(pos=[[x, self.data[1][index]]], size=10, pen=QColor('red'))
-                except Exception:
-                    pass
-                self.text_item.setText(f'x: {x}\ny: {self.data[1][index]}')
-                self.text_item.setPos(x, self.data[1][index])
-                self.vertical_line.setPos(x)
+            x, y = float(mouse_point.x()), float(mouse_point.y())
+            if self.xmin <= x <= self.xmax and self.ymin <= y <= self.ymax:
+                index = self.searchPointIndex(x, y)
+                self.scatter_plot_item.setData(pos=[[self.data[0][index], self.data[1][index]]], size=10,
+                                               pen=QColor('red'))
+                self.text_item.setText(f'x: {self.data[0][index]}\ny: {self.data[1][index]}')
+                self.text_item.setPos(self.data[0][index], self.data[1][index])
+                self.vertical_line.setPos(self.data[0][index])
                 self.horizontal_line.setPos(self.data[1][index])
 
-    def searchPointIndex(self, xpos):
+    def searchPointIndex(self, xpos, ypos):
         """寻找x坐标附近的点，返回该点的索引"""
 
-        for i in range(len(self.data[0])):
-            if (xpos - self.data[0][i]) / (self.data[0][i] + 10e-10) < 10e-10:
-                return i
+        distance = []
+        for i in range(self.data.shape[1]):
+            distance.append(np.sqrt((xpos - self.data[0][i]) ** 2 + (ypos - self.data[1][i]) ** 2))
+        index = distance.index(min(distance))
+
+        return index

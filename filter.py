@@ -17,7 +17,7 @@ class FilterI(object):
         """滤波器的一些参数"""
 
         self.filter_names = {'Butterworth': butter, 'Chebyshev type I': cheby1, 'Chebyshev type II': cheby2,
-                      'Elliptic (Cauer)': ellip, 'Bessel/Thomson': bessel}
+                             'Elliptic (Cauer)': ellip, 'Bessel/Thomson': bessel}
         self.filter_name = filter_name
         self.filter = self.filter_names[filter_name]
         self.order = 4
@@ -301,6 +301,7 @@ class FilterI(object):
             try:
                 self.cal_order, self.cal_Wn = self.cal_names[self.filter](wp=wp, ws=ws, gpass=self.gpass,
                                                                           gstop=self.gstop, analog=self.analog)
+
             except Exception as err:
                 printError(err)
 
@@ -338,6 +339,7 @@ class FilterI(object):
             elif self.filter == bessel:
                 self.b, self.a = self.filter(N=self.order, Wn=self.Wn, btype=self.method, analog=self.analog,
                                              norm=self.norm)
+
         except Exception as err:
             printError(err)
 
@@ -349,7 +351,7 @@ class FilterII(object):
         """滤波器一些参数"""
 
         self.filter_names = {'Notch Digital Filter': iirnotch, 'Peak (Resonant) Digital Filter': iirpeak,
-                      'Notching or Peaking Digital Comb Filter': iircomb}
+                             'Notching or Peaking Digital Comb Filter': iircomb}
         self.filter_name = filter_name
         self.filter = self.filter_names[filter_name]
         self.w0 = 0.5
@@ -446,5 +448,6 @@ class FilterII(object):
                                              pass_zero=self.pass_zero)
             else:
                 self.b, self.a = self.filter(w0=self.w0, Q=self.Q, fs=self.fs)
+
         except Exception as err:
             printError(err)
