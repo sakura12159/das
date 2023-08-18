@@ -1,9 +1,9 @@
 """
-2023-6-26
-ver1.3.4
+2023-8-18
+ver1.4.4
 
-1.将绘制多通道云图功能移动到Plot菜单中
-2.修改部分图名
+1.翻译为中文版
+2.移除了转换数据单位的功能
 """
 
 import ctypes
@@ -24,10 +24,10 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from scipy.signal import hilbert, filtfilt, spectrogram, detrend
 from scipy.signal.windows import *
 
-from en.filter_en import *
-from en.function_en import *
-from en.image import *
-from en.widget_en import *
+from filter_ch import *
+from function_ch import *
+from image import *
+from widget_ch import *
 
 
 class MainWindow(QMainWindow):
@@ -36,9 +36,10 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
         self.initMainWindow()
+        self.initGlobalParams()
         self.initUI()
         self.initMenu()
-        self.initImage()
+        self.initTabWidget()
         self.initLayout()
 
     def initMainWindow(self):
@@ -49,16 +50,37 @@ class MainWindow(QMainWindow):
         self.screen_width = int(self.screen.screenGeometry().width() * 0.8)
         self.resize(self.screen_width, self.screen_height)
 
+    def initGlobalParams(self):
+        """初始化全局参数，即每次选择文件不改变"""
+
+        # plt绘图参数
+        plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'Times New Roman']
+        plt.rcParams['axes.unicode_minus'] = False
+        plt.rcParams['axes.labelsize'] = 12
+        plt.rcParams['axes.titlesize'] = 18
+        plt.rcParams['xtick.labelsize'] = 10
+        plt.rcParams['ytick.labelsize'] = 10
+
+        # pg组件设置
+        pg.setConfigOptions(leftButtonPan=True)  # 设置可用鼠标缩放
+        pg.setConfigOption('background', 'w')
+        pg.setConfigOption('foreground', 'k')  # 设置界面前背景色
+
+        # 输出设置
+        np.set_printoptions(threshold=sys.maxsize, linewidth=sys.maxsize)  # 设置输出时每行的长度
+
+        self.channel_number = 1  # 当前通道
+        self.channel_number_step = 1  # 通道号递增减步长
+        self.files_read_number = 1  # 表格连续读取文件数
+
     def initUI(self):
         """初始化ui"""
 
-        # self.setFont(QFont('Times New Roman', 9))
-
         self.status_bar = self.statusBar()  # 状态栏
-        self.status_bar.setStyleSheet('font-size: 15px; font-family: "Times New Roman";')
+        self.status_bar.setStyleSheet('font-size: 15px; font-family: "Times New Roman", "SimHei";')
         self.menu_bar = self.menuBar()  # 菜单栏
-        self.menu_bar.setStyleSheet('font-size: 18px; font-family: "Times New Roman";')
-        self.setWindowTitle('DAS Visualizer')
+        self.menu_bar.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "SimHei";')
+        self.setWindowTitle('Φ-DAS数据查看软件')
 
         getPicture(icon_jpg, 'icon.jpg')
         self.setWindowIcon(QIcon('icon.jpg'))
@@ -69,378 +91,217 @@ class MainWindow(QMainWindow):
     def initMenu(self):
         """初始化菜单"""
 
-        # File
-        file_menu = self.menu_bar.addMenu('File')
+        # 文件
+        self.file_menu = createMenu('文件', self.menu_bar)
 
-        # Import
-        import_action = QAction('Import', file_menu)
-        import_action.setStatusTip('Import data file(s)')
-        import_action.setShortcut('Ctrl+I')
-        import_action.triggered.connect(self.importData)
-        file_menu.addAction(import_action)
+        # 导入
+        self.import_action = createAction('导入', self.file_menu, '导入数据文件', self.importData, short_cut='Ctrl+I')
 
-        # File-Export
-        self.export_action = QAction('Export', file_menu)
-        self.export_action.setEnabled(False)
-        self.export_action.setStatusTip('Export data')
-        self.export_action.setShortcut('Ctrl+E')
-        self.export_action.triggered.connect(self.exportData)
-        file_menu.addAction(self.export_action)
+        # 文件-导出
+        self.export_action = createAction('导出', self.file_menu, '导出数据', self.exportData, short_cut='Ctrl+E')
 
-        file_menu.addSeparator()
+        self.file_menu.addSeparator()
 
-        # Quit
-        quit_action = QAction('Quit', file_menu)
-        quit_action.setStatusTip('Quit DAS_Visualizer')
-        quit_action.setShortcut('Ctrl+Q')
-        quit_action.triggered.connect(qApp.quit)
-        file_menu.addAction(quit_action)
+        # 退出
+        self.quit_action = createAction('退出', self.file_menu, '退出软件', qApp.quit, short_cut='Ctrl+Q')
 
-        # Operation
-        self.operation_menu = self.menu_bar.addMenu('Operation')
-        self.operation_menu.setEnabled(False)
+        # 操作
+        self.operation_menu = createMenu('操作', self.menu_bar, enabled=False)
 
-        # Operation-Calculate SNR
-        calculate_snr_action = QAction('Calculate SNR', self.operation_menu)
-        calculate_snr_action.setStatusTip('Calculate SNR of the chosen segment')
-        calculate_snr_action.triggered.connect(self.calculateSNRDialog)
-        self.operation_menu.addAction(calculate_snr_action)
+        # 操作-计算信噪比
+        self.calculate_snr_action = createAction('计算信噪比', self.operation_menu, '计算选中数据的信噪比',
+                                                 self.calculateSNRDialog)
 
         self.operation_menu.addSeparator()
 
-        # Operation-Clip Data By Sampling Times
-        clip_time_action = QAction('Clip Data By Sampling Times', self.operation_menu)
-        clip_time_action.setStatusTip('Clip data within a certain range of sampling times')
-        clip_time_action.triggered.connect(self.clipSamplingTimesDialog)
-        self.operation_menu.addAction(clip_time_action)
+        # 操作-裁剪数据（采样次数）
+        self.clip_time_action = createAction('裁剪数据（采样次数）', self.operation_menu,
+                                             '通过设置采样次数区间裁剪数据，区间为左闭右开', self.clipSamplingTimesDialog)
 
-        # Operation-Clip Data By Channels
-        clip_channel_action = QAction('Clip Data By Channels', self.operation_menu)
-        clip_channel_action.setStatusTip('Clip data within a certain range of channels')
-        clip_channel_action.triggered.connect(self.clipChannelsDialog)
-        self.operation_menu.addAction(clip_channel_action)
+        # 操作-裁剪数据（通道号）
+        self.clip_channel_action = createAction('裁剪数据（通道）', self.operation_menu,
+                                                '通过设置通道区间裁剪师数据，区间为左闭右开', self.clipChannelsDialog)
 
         self.operation_menu.addSeparator()
 
-        # Operation-Convert Data Unit To
-        convert_menu = QMenu('Convert Data Unit To', self.operation_menu)
-        self.operation_menu.addMenu(convert_menu)
+        # 操作-设置通道切换步长
+        self.change_channel_number_step_action = createAction('设置通道切换步长', self.operation_menu, '设置切换通道时的步长',
+                                                              self.changeChannelNumberStep)
 
-        # Operation-Convert Data Unit To-Phase Difference(rad)
-        self.phase_difference_action = QAction('Phase Difference(rad)', convert_menu)
-        self.phase_difference_action.setStatusTip('Set phase difference as data unit')
-        self.phase_difference_action.triggered.connect(self.convert2PhaseDifference)
-        self.phase_difference_action.setCheckable(True)
-        self.phase_difference_action.setChecked(True)
-        convert_menu.addAction(self.phase_difference_action)
+        # 操作-设置文件读取数量
+        self.change_files_read_number_action = createAction('设置文件读取数量', self.operation_menu,
+                                                            '设置从表格选中文件时的读取数量，从选中的文件开始算起',
+                                                            self.changeFilesReadNumberDialog)
 
-        # Operation-Convert Data Unit To-Strain Rate(s^-1)
-        self.strain_rate_action = QAction('Strain Rate(s^-1)', convert_menu)
-        self.strain_rate_action.setStatusTip('Set strain rate as data unit')
-        self.strain_rate_action.triggered.connect(self.convert2StrainRate)
-        self.strain_rate_action.setCheckable(True)
-        convert_menu.addAction(self.strain_rate_action)
+        # 绘图
+        self.plot_menu = createMenu('绘图', self.menu_bar, enabled=False)
 
-        self.operation_menu.addSeparator()
+        # 绘图-二值图
+        self.plot_binary_image_action = createAction('二值图', self.plot_menu, '通过设置或计算阈值来绘制二值图',
+                                                     self.binaryImageDialog)
 
-        # Operation-Change Channel Number Step
-        change_channel_number_step_action = QAction('Change Channel Number Step', self.operation_menu)
-        change_channel_number_step_action.setStatusTip('Change the step when changing channel number')
-        change_channel_number_step_action.triggered.connect(self.changeChannelNumberStep)
-        self.operation_menu.addAction(change_channel_number_step_action)
+        # 绘图-数据特征
+        self.plot_data_features_menu = createMenu('数据特征', self.plot_menu, status_tip='绘制所有通道的时域或频域特征图')
 
-        # Operation-Change Files Read Number
-        change_files_read_number_action = QAction('Change Files Read Number', self.operation_menu)
-        change_files_read_number_action.setStatusTip(
-            'Change the number of files read when choosing file from the table, counting from the chosen one.')
-        change_files_read_number_action.triggered.connect(self.changeFilesReadNumberDialog)
-        self.operation_menu.addAction(change_files_read_number_action)
+        # 绘图-数据特征-最大值等
+        self.time_domain_chars_text = ['最大值', '峰值', '最小值', '平均值', '峰峰值', '绝对平均值', '均方根值', '方根幅值',
+                                       '方差', '标准差', '峭度', '偏度', '裕度因子', '波形因子', '脉冲因子', '峰值因子', '峭度因子']
 
-        # Plot
-        self.plot_menu = self.menu_bar.addMenu('Plot')
-        self.plot_menu.setEnabled(False)
+        self.fre_domain_chars_text = ['重心频率', '平均频率', '均方根频率', '均方频率', '频率方差', '频率标准差']
 
-        # Plot-Plot Binary Image
-        plot_binary_image_action = QAction('Plot Binary Image', self.plot_menu)
-        plot_binary_image_action.setStatusTip('Set the threshold to plot binary image')
-        plot_binary_image_action.triggered.connect(self.binaryImageDialog)
-        self.plot_menu.addAction(plot_binary_image_action)
-
-        # Plot-Plot Data Features
-        self.plot_data_features_menu = QMenu('Plot Data Features', self.plot_menu)
-        self.plot_data_features_menu.setStatusTip(
-            'Calculate and plot time-domain & frequency-domain features of data')
-        self.plot_menu.addMenu(self.plot_data_features_menu)
-
-        # Plot-Plot Data Features-Maximum Value etc.
-        self.time_domain_chars_text = {'max_value': 'Maximum Value', 'peak_value': 'Peak Value',
-                                       'min_value': 'Minimum Value', 'mean': 'Mean Value',
-                                       'peak_peak_value': 'Peak-To-Peak Value',
-                                       'mean_absolute_value': 'Mean-Absolute Value',
-                                       'root_mean_square': 'Root-Mean-Square',
-                                       'square_root_amplitude': 'Square-Root-Amplitude', 'variance': 'Variance',
-                                       'standard_deviation': 'Standard-Deviation', 'kurtosis': 'Kurtosis',
-                                       'skewness': 'Skewness', 'clearance_factor': 'Clearance Factor',
-                                       'shape_factor': 'Shape Factor', 'impulse_factor': 'Impulse Factor',
-                                       'crest_factor': 'Crest Factor', 'kurtosis_factor': 'Kurtosis Factor'}
-
-        self.fre_domain_chars_text = {'centroid_frequency': 'Centroid Frequency', 'mean_frequency': 'Mean Frequency',
-                                      'root_mean_square_frequency': 'Root-Mean-Square Frequency',
-                                      'frequency_variance': 'Frequency Variance',
-                                      'mean_square_frequency': 'Mean-Square Frequency',
-                                      'frequency_standard_deviation': 'Frequency Standard-Deviation'}
-
-        for i in self.time_domain_chars_text.values():
-            action = QAction(f'{i}', self.plot_data_features_menu)
-            action.triggered.connect(self.plotTimeDomainFeature)
-            self.plot_data_features_menu.addAction(action)
+        for i in self.time_domain_chars_text:
+            _ = createAction(i, self.plot_data_features_menu, f'绘制{i}图', self.plotTimeDomainFeature)
 
         # 时域和频域特征之间的分隔线
         self.plot_data_features_menu.addSeparator()
 
-        for i in self.fre_domain_chars_text.values():
-            action = QAction(f'{i}', self.plot_data_features_menu)
-            action.triggered.connect(self.plotFrequencyDomainFeature)
-            self.plot_data_features_menu.addAction(action)
+        for i in self.fre_domain_chars_text:
+            _ = createAction(i, self.plot_data_features_menu, f'绘制{i}图', self.plotFrequencyDomainFeature)
 
-        # Plot-Plot Multi-Channel Image
-        plot_multichannel_image_action = QAction('Plot Multi-Channel Image', self.plot_menu)
-        plot_multichannel_image_action.setStatusTip('Plot multi-channel image')
-        plot_multichannel_image_action.triggered.connect(self.plotMultiChannelImage)
-        self.plot_menu.addAction(plot_multichannel_image_action)
+        # 绘图-多通道云图
+        self.plot_multichannel_image_action = createAction('多通道云图', self.plot_menu, '绘制多通道云图',
+                                                           self.plotMultiChannelImage)
 
-        # Plot-Plot Strain Image
-        plot_strain_image_action = QAction('Plot Strain Image', self.plot_menu)
-        plot_strain_image_action.setStatusTip('Plot strain image in microstrain')
-        plot_strain_image_action.triggered.connect(self.plotStrain)
-        self.plot_menu.addAction(plot_strain_image_action)
+        # 绘图-应变图
+        self.plot_strain_image_action = createAction('应变图', self.plot_menu, '绘制应变图，单位为微应变', self.plotStrain)
 
         self.plot_menu.addSeparator()
 
-        # Plot-Plot PSD
-        plot_psd_menu = QMenu('Plot PSD', self.plot_menu)
-        self.plot_menu.addMenu(plot_psd_menu)
+        # 绘图-功率谱密度图
+        self.plot_psd_menu = createMenu('功率谱密度图', self.plot_menu)
 
-        # Plot-Plot PSD-Plot PSD
-        plot_psd_action = QAction('Plot PSD', plot_psd_menu)
-        plot_psd_action.setStatusTip('Plot psd')
-        plot_psd_action.triggered.connect(self.plotPSD)
-        plot_psd_menu.addAction(plot_psd_action)
+        # 绘图-功率谱密度图-功率谱密度图
+        self.plot_psd_action = createAction('功率谱密度图', self.plot_psd_menu, '绘制功率谱密度图', self.plotPSD)
 
-        # Plot-Plot PSD-Plot 2D PSD
-        plot_2d_psd_action = QAction('Plot 2D PSD', plot_psd_menu)
-        plot_2d_psd_action.setStatusTip('Plot 2d psd')
-        plot_2d_psd_action.triggered.connect(self.plot2dPSD)
-        plot_psd_menu.addAction(plot_2d_psd_action)
+        # 绘图-功率谱密度图-功率谱密度色块图
+        self.plot_2d_psd_action = createAction('功率谱密度色块图', self.plot_psd_menu, '绘制功率谱密度色块图', self.plot2dPSD)
 
-        # Plot-Plot PSD-Plot 3D PSD
-        plot_3d_psd_action = QAction('Plot 3D PSD', plot_psd_menu)
-        plot_3d_psd_action.setStatusTip('Plot 3d psd')
-        plot_3d_psd_action.triggered.connect(self.plot3dPSD)
-        plot_psd_menu.addAction(plot_3d_psd_action)
+        # 绘图-功率谱密度图-三维功率谱密度图
+        self.plot_3d_psd_action = createAction('三维功率谱密度图', self.plot_psd_menu, '绘制三维功率谱密度图', self.plot3dPSD)
 
-        # Plot-Plot Spectrum
-        plot_spectrum_menu = QMenu('Plot Spectrum', self.plot_menu)
-        self.plot_menu.addMenu(plot_spectrum_menu)
+        # 绘图-谱
+        self.plot_spectrum_menu = createMenu('谱', self.plot_menu)
 
-        # Plot-Plot Spectrum-Plot Magnitude Spectrum
-        plot_mag_spectrum_action = QAction('Plot Magnitude Spectrum', plot_spectrum_menu)
-        plot_mag_spectrum_action.setStatusTip('Plot magnitude spectrum')
-        plot_mag_spectrum_action.triggered.connect(self.plotMagnitudeSpectrum)
-        plot_spectrum_menu.addAction(plot_mag_spectrum_action)
+        # 绘图-谱-幅度谱
+        self.plot_mag_spectrum_action = createAction('幅度谱', self.plot_spectrum_menu, '绘制幅度谱',
+                                                     self.plotMagnitudeSpectrum)
 
-        # Plot-Plot Spectrum-Plot 2D Magnitude Spectrum
-        plot_2d_mag_spectrum_action = QAction('Plot 2D Magnitude Spectrum', plot_spectrum_menu)
-        plot_2d_mag_spectrum_action.setStatusTip('Plot 2d magnitude spectrum')
-        plot_2d_mag_spectrum_action.triggered.connect(self.plot2dMagnitudeSpectrum)
-        plot_spectrum_menu.addAction(plot_2d_mag_spectrum_action)
+        # 绘图-谱-幅度谱色块图
+        self.plot_2d_mag_spectrum_action = createAction('幅度谱色块图', self.plot_spectrum_menu, '绘制幅度谱色块图',
+                                                        self.plot2dMagnitudeSpectrum)
 
-        # Plot-Plot Spectrum-Plot 3D Magnitude Spectrum
-        plot_3d_mag_psd_action = QAction('Plot 3D Magnitude Spectrum', plot_spectrum_menu)
-        plot_3d_mag_psd_action.setStatusTip('Plot 3d magnitude spectrum')
-        plot_3d_mag_psd_action.triggered.connect(self.plot3dMagnitudeSpectrum)
-        plot_spectrum_menu.addAction(plot_3d_mag_psd_action)
+        # 绘图-谱-三维幅度谱
+        self.plot_3d_mag_psd_action = createAction('三维幅度谱', self.plot_spectrum_menu, '绘制三维幅度谱',
+                                                   self.plot3dMagnitudeSpectrum)
 
-        plot_spectrum_menu.addSeparator()
+        self.plot_spectrum_menu.addSeparator()
 
-        # Plot-Plot Spectrum-Plot Angle Spectrum
-        plot_ang_spectrum_action = QAction('Plot Angle Spectrum', plot_spectrum_menu)
-        plot_ang_spectrum_action.setStatusTip('Plot angle spectrum')
-        plot_ang_spectrum_action.triggered.connect(self.plotAngleSpectrum)
-        plot_spectrum_menu.addAction(plot_ang_spectrum_action)
+        # 绘图-谱-角度谱
+        self.plot_ang_spectrum_action = createAction('角度谱', self.plot_spectrum_menu, '绘制角度谱', self.plotAngleSpectrum)
 
-        # Plot-Plot Spectrum-Plot 2D Angle Spectrum
-        plot_2d_ang_spectrum_action = QAction('Plot 2D Angle Spectrum', plot_spectrum_menu)
-        plot_2d_ang_spectrum_action.setStatusTip('Plot 2d angle spectrum')
-        plot_2d_ang_spectrum_action.triggered.connect(self.plot2dAngleSpectrum)
-        plot_spectrum_menu.addAction(plot_2d_ang_spectrum_action)
+        # 绘图-谱-角度谱色块图
+        self.plot_2d_ang_spectrum_action = createAction('角度谱色块图', self.plot_spectrum_menu, '绘制角度谱色块图',
+                                                        self.plot2dAngleSpectrum)
 
-        # Plot-Plot Spectrum-Plot 3D Angle Spectrum
-        plot_3d_ang_spectrum_action = QAction('Plot 3D Angle Spectrum', plot_spectrum_menu)
-        plot_3d_ang_spectrum_action.setStatusTip('Plot 3d angle spectrum')
-        plot_3d_ang_spectrum_action.triggered.connect(self.plot3dAngleSpectrum)
-        plot_spectrum_menu.addAction(plot_3d_ang_spectrum_action)
+        # 绘图-谱-三维角度谱
+        self.plot_3d_ang_spectrum_action = createAction('三维角度谱', self.plot_spectrum_menu, '绘制三维角度谱',
+                                                        self.plot3dAngleSpectrum)
 
-        # Plot-Window Options
-        window_options_action = QAction('Window Options', self.plot_menu)
-        window_options_action.setStatusTip('Window parameters')
-        window_options_action.triggered.connect(self.windowOptionsDialog)
-        self.plot_menu.addAction(window_options_action)
+        # 绘图-加窗设置
+        self.window_options_action = createAction('加窗设置', self.plot_menu, '设置加窗参数', self.windowOptionsDialog)
 
-        # Filter
-        self.filter_menu = self.menu_bar.addMenu('Filter')
-        self.filter_menu.setEnabled(False)
+        # 滤波
+        self.filter_menu = createMenu('滤波', self.menu_bar, enabled=False)
 
-        # Filter-If Update Data
-        self.update_data_action = QAction('Update Data(False)', self.filter_menu)
-        self.update_data_action.setStatusTip(
-            'if True, data will be updated after each filtering operation for continuous process')
-        self.update_data_action.triggered.connect(self.updateFilteredData)
-        self.filter_menu.addAction(self.update_data_action)
+        # 滤波-更新数据
+        self.update_data_action = createAction('更新数据（否）', self.filter_menu, '如果为是，每次滤波后数据会更新',
+                                               self.updateFilteredData)
 
         self.filter_menu.addSeparator()
 
-        # Filter-Detrend
-        self.detrend_menu = QMenu('Detrend', self.filter_menu)
-        self.detrend_menu.setStatusTip('Remove linear trend along axis from data')
-        self.filter_menu.addMenu(self.detrend_menu)
+        # 滤波-去趋势
+        self.detrend_menu = createMenu('去趋势', self.filter_menu, status_tip='去除数据中的趋势')
 
-        # Filter-Detrend-Linear
-        detrend_linear_action = QAction('Linear', self.detrend_menu)
-        detrend_linear_action.setStatusTip('The result of a linear least-squares fit to data is subtracted from data')
-        detrend_linear_action.triggered.connect(self.detrendData)
-        self.detrend_menu.addAction(detrend_linear_action)
+        # 滤波-去趋势-线性
+        self.detrend_linear_action = createAction('线性', self.detrend_menu, '去除数据线性趋势',
+                                                  lambda: self.detrendData('linear'))
 
-        # Filter-Detrend-Constant
-        detrend_constant_action = QAction('Constant', self.detrend_menu)
-        detrend_constant_action.setStatusTip('The mean of data is subtracted')
-        detrend_constant_action.triggered.connect(self.detrendData)
-        self.detrend_menu.addAction(detrend_constant_action)
+        # 滤波-去趋势-常数
+        self.detrend_constant_action = createAction('常数', self.detrend_menu, '去除数据均值',
+                                                    lambda: self.detrendData('constant'))
 
-        # Filter-EMD
-        self.emd_menu = QMenu('EMD', self.filter_menu)
-        self.emd_menu.setStatusTip('Use EMD etc. to decompose and reconstruct data')
-        self.filter_menu.addMenu(self.emd_menu)
+        # 滤波-EMD
+        self.emd_menu = createMenu('EMD', self.filter_menu, status_tip='使用EMD及衍生方式滤波')
 
-        # Filter-EMD-EMD
-        emd_emd_action = QAction('EMD', self.emd_menu)
-        emd_emd_action.setStatusTip('Use EMD to decompose and reconstruct data')
-        emd_emd_action.triggered.connect(self.plotEMD)
-        self.emd_menu.addAction(emd_emd_action)
-
-        # Filter-EMD-EEMD
-        emd_eemd_action = QAction('EEMD', self.emd_menu)
-        emd_eemd_action.setStatusTip('Use EEMD to decompose and reconstruct data')
-        emd_eemd_action.triggered.connect(self.plotEMD)
-        self.emd_menu.addAction(emd_eemd_action)
-
-        # Filter-EMD-CEEMDAN
-        emd_ceemdan_action = QAction('CEEMDAN', self.emd_menu)
-        emd_ceemdan_action.setStatusTip('Use CEEMDAN to decompose and reconstruct data')
-        emd_ceemdan_action.triggered.connect(self.plotEMD)
-        self.emd_menu.addAction(emd_ceemdan_action)
+        # 滤波-EMD-EMD, EEMD and CEEMDAN
+        emd_method_list = ['EMD', 'EEMD', 'CEEMDAN']
+        for i in emd_method_list:
+            _ = createAction(i, self.emd_menu, f'使用{i}进行数据分解与重构', self.plotEMD)
 
         self.emd_menu.addSeparator()
 
-        # Filter-EMD-Plot Instantaneous Frequency
-        self.emd_plot_ins_fre_action = QAction('Plot Instantaneous Frequency')
+        # 滤波-EMD-绘制瞬时频率
+        self.emd_plot_ins_fre_action = createAction('绘制瞬时频率', self.emd_menu, '绘制重构IMF的瞬时频率',
+                                                    self.plotEMDInstantaneousFrequency)
         self.emd_plot_ins_fre_action.setEnabled(False)
-        self.emd_plot_ins_fre_action.setStatusTip('Plots and shows instantaneous frequencies for provided IMF(s)')
-        self.emd_plot_ins_fre_action.triggered.connect(self.plotEMDInstantaneousFrequency)
-        self.emd_menu.addAction(self.emd_plot_ins_fre_action)
 
         self.emd_menu.addSeparator()
 
-        # Filter-EMD-Option
-        emd_options_action = QAction('Options', self.emd_menu)
-        emd_options_action.setStatusTip('EMD options')
-        emd_options_action.triggered.connect(self.EMDOptionsDialog)
-        self.emd_menu.addAction(emd_options_action)
+        # 滤波-EMD-设置
+        self.emd_options_action = createAction('设置', self.emd_menu, 'EMD相关设置', self.EMDOptionsDialog)
 
-        # Filter-IIR Filter
-        self.iir_menu = QMenu('IIR Filter', self.filter_menu)
-        self.filter_menu.addMenu(self.iir_menu)
+        # 滤波-IIR滤波器
+        self.iir_menu = createMenu('IIR滤波器', self.filter_menu)
 
-        # Filter-IIR Filter-Butterworth etc.
+        # 滤波-IIR滤波器-Butterworth等
         cal_filter_types = ['Butterworth', 'Chebyshev type I', 'Chebyshev type II', 'Elliptic (Cauer)']
         for i in cal_filter_types:
-            action = QAction(i, self.iir_menu)
-            action.setStatusTip(f'Design a {i} filter')
-            action.triggered.connect(self.iirCalculateFilterParams)
-            self.iir_menu.addAction(action)
+            _ = createAction(i, self.iir_menu, f'设计{i}滤波器', self.iirCalculateFilterParams)
 
         self.iir_menu.addSeparator()
 
-        # Filter-IIR Filter-Bessel/Thomson
-        iir_bessel_action = QAction('Bessel/Thomson', self.iir_menu)
-        iir_bessel_action.setStatusTip('Design a Bessel/Thomson filter')
-        iir_bessel_action.triggered.connect(self.iirDesignBesselFilter)
-        self.iir_menu.addAction(iir_bessel_action)
+        # 滤波-IIR滤波器-Bessel/Thomson
+        self.iir_bessel_action = createAction('Bessel/Thomson', self.iir_menu, '设计Bessel/Thomson滤波器',
+                                              self.iirDesignBesselFilter)
 
         self.iir_menu.addSeparator()
 
-        # Filter-IIR Filter-notch etc.
+        # 滤波-IIR滤波器-notch等
         comb_filter_types = ['Notch Digital Filter', 'Peak (Resonant) Digital Filter',
                              'Notching or Peaking Digital Comb Filter']
         for i in comb_filter_types:
-            action = QAction(i, self.iir_menu)
-            action.setStatusTip(f'Design a {i} filter')
-            action.triggered.connect(self.iirDesignCombFilter)
-            self.iir_menu.addAction(action)
+            _ = createAction(i, self.iir_menu, f'设计{i}滤波器', self.iirDesignCombFilter)
 
-        # Filter-Wavelet
-        wavelet_menu = QMenu('Wavelet', self.filter_menu)
-        self.filter_menu.addMenu(wavelet_menu)
+        # 滤波-小波
+        self.wavelet_menu = createMenu('小波', self.filter_menu)
 
-        # Filter-Wavelet-Discrete Wavelet Transform
-        wavelet_dwt_action = QAction('Discrete Wavelet Transform', wavelet_menu)
-        wavelet_dwt_action.setStatusTip(
-            'Use discrete wavelet transform to decompose/reconstruct as filtering or get rid of noise')
-        wavelet_dwt_action.triggered.connect(self.waveletDWTDialog)
-        wavelet_menu.addAction(wavelet_dwt_action)
+        # 滤波-小波-离散小波变换
+        self.wavelet_dwt_action = createAction('离散小波变换', self.wavelet_menu, '使用离散小波变换进行数据分解与重构或去噪',
+                                               self.waveletDWTDialog)
 
-        # Filter-Wavelet-Denoise
-        wavelet_threshold_action = QAction('Denoise', wavelet_menu)
-        wavelet_threshold_action.setStatusTip('Denoise input data depending on the mode argument')
-        wavelet_threshold_action.triggered.connect(self.waveletThresholdDialog)
-        wavelet_menu.addAction(wavelet_threshold_action)
+        # 滤波-小波-小波去噪
+        self.wavelet_threshold_action = createAction('小波去噪', self.wavelet_menu, '小波去噪', self.waveletThresholdDialog)
 
-        wavelet_menu.addSeparator()
+        self.wavelet_menu.addSeparator()
 
-        # Filter-Wavelet-Wavelet Packets
-        wavelet_packet_action = QAction('Wavelet Packets', wavelet_menu)
-        wavelet_packet_action.setStatusTip(
-            'Use Wavelet Packets to decompose data into subnodes and reconstruct from ones needed')
-        wavelet_packet_action.triggered.connect(self.waveletPacketsDialog)
-        wavelet_menu.addAction(wavelet_packet_action)
+        # 滤波-小波-小波包
+        self.wavelet_threshold_action = createAction('小波包', self.wavelet_menu, '使用小波包进行数据分解并从选择的节点重构',
+                                                     self.waveletPacketsDialog)
 
-    def initImage(self):
+    def initTabWidget(self):
         """初始化绘图区"""
 
-        plt.rc('font', family='Times New Roman')
-        # plt.rcParams['axes.labelsize'] = 15
-        plt.rcParams['axes.titlesize'] = 18
-        plt.rcParams['xtick.labelsize'] = 12
-        plt.rcParams['ytick.labelsize'] = 12
-
-        pg.setConfigOptions(leftButtonPan=True)  # 设置可用鼠标缩放
-        pg.setConfigOption('background', 'w')
-        pg.setConfigOption('foreground', 'k')  # 设置界面前背景色
-
         # 绘制灰度图
-        self.plot_gray_scale_image = MyPlotWidget('Gray Scale', 'Time(s)', 'Channel')
-        self.plot_gray_scale_image.setXRange(0, 5)
-        self.plot_gray_scale_image.setYRange(0, 200)
+        self.plot_gray_scale_widget = MyPlotWidget('灰度图', '时间（s）', '通道', check_mouse=False)
+        self.plot_gray_scale_widget.setXRange(0, 5)
+        self.plot_gray_scale_widget.setYRange(0, 200)
 
         # 绘制单通道相位差-时间图
-        self.plot_single_channel_time_widget = MyPlotWidget('Phase Difference', 'Time(s)',
-                                                            'Phase Difference(rad)',
-                                                            grid=True)
+        self.plot_single_channel_time_widget = MyPlotWidget('相位差图', '时间（s）', '相位差（rad）', grid=True)
         self.plot_single_channel_time_widget.setXRange(0, 5)
 
         # 绘制频谱图
-        self.plot_amplitude_frequency_widget = MyPlotWidget('Amplitude - Frequency', 'Frequency(Hz)',
-                                                            'Amplitude', grid=True)
+        self.plot_amplitude_frequency_widget = MyPlotWidget('幅值图', '频率（Hz）', '幅值', grid=True)
         self.plot_amplitude_frequency_widget.setXRange(0, 500)
 
         combine_image_widget = QWidget()
@@ -451,11 +312,11 @@ class MainWindow(QMainWindow):
 
         self.tab_widget = QTabWidget()
         self.tab_widget.setMovable(True)  # 设置tab可移动
-        self.tab_widget.setStyleSheet('font-size: 15px; font-family: "Times New Roman";')
+        self.tab_widget.setStyleSheet('font-size: 15px; font-family: "Times New Roman", "Microsoft YaHei";')
         self.tab_widget.setTabsClosable(True)  # 设置tab可关闭
         self.tab_widget.tabCloseRequested[int].connect(self.removeTab)
-        self.tab_widget.addTab(self.plot_gray_scale_image, 'Gray Scale')
-        self.tab_widget.addTab(combine_image_widget, 'Single')
+        self.tab_widget.addTab(self.plot_gray_scale_widget, '灰度图')
+        self.tab_widget.addTab(combine_image_widget, '单通道')
         self.tab_widget.tabBar().setTabButton(0, QTabBar.RightSide, None)
         self.tab_widget.tabBar().setTabButton(1, QTabBar.RightSide, None)  # 设置删除按钮消失
 
@@ -471,7 +332,7 @@ class MainWindow(QMainWindow):
         # 文件区
         file_hbox = QHBoxLayout()
         file_area_vbox = QVBoxLayout()
-        file_path_label = Label('File Path')
+        file_path_label = Label('文件路径')
         self.file_path_line_edit = LineEdit()
         self.file_path_line_edit.setFocusPolicy(Qt.NoFocus)
 
@@ -483,9 +344,9 @@ class MainWindow(QMainWindow):
         file_table_scrollbar.setStyleSheet('min-height: 100')  # 设置滚动滑块的最小高度
         self.files_table_widget = QTableWidget(100, 1)
         self.files_table_widget.setVerticalScrollBar(file_table_scrollbar)
-        self.files_table_widget.setStyleSheet('font-size: 17px; font-family: "Times New Roman";')
+        self.files_table_widget.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
         self.files_table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 设置表格不可编辑
-        self.files_table_widget.setHorizontalHeaderLabels(['File'])  # 设置表头
+        self.files_table_widget.setHorizontalHeaderLabels(['文件'])  # 设置表头
         self.files_table_widget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         QTableWidget.resizeRowsToContents(self.files_table_widget)
         QTableWidget.resizeColumnsToContents(self.files_table_widget)  # 设置表格排与列的宽度随内容改变
@@ -501,20 +362,21 @@ class MainWindow(QMainWindow):
 
         # 右侧
         # 参数
-        sampling_rate_label = Label('Sampling Rate')
+        sampling_rate_label = Label('采样率')
         self.sampling_rate_line_edit = OnlyNumLineEdit()
         self.sampling_rate_line_edit.setFocusPolicy(Qt.NoFocus)
 
-        sampling_times_label = Label('Sampling Times')
+        sampling_times_label = Label('采样次数')
         self.current_sampling_times_line_edit = OnlyNumLineEdit()
         self.current_sampling_times_line_edit.setFocusPolicy(Qt.NoFocus)
 
-        number_of_channels_label = Label('Number of Channels')
+        number_of_channels_label = Label('通道数')
         self.current_channels_line_edit = OnlyNumLineEdit()
         self.current_channels_line_edit.setFocusPolicy(Qt.NoFocus)
 
-        channel_number_label = Label('Channel')
+        channel_number_label = Label('通道号')
         self.channel_number_spinbx = SpinBox()
+        self.channel_number_spinbx.setValue(1)
         self.channel_number_spinbx.setMinimumWidth(100)
         self.channel_number_spinbx.textChanged.connect(self.changeChannelNumber)
         self.channel_number_spinbx.textChanged.connect(self.plotSingleChannelTime)
@@ -533,7 +395,7 @@ class MainWindow(QMainWindow):
         self.stopBtn.clicked.connect(self.resetPlayer)
 
         self.playBtn.setDisabled(True)
-        self.stopBtn.setDisabled(True)
+        self.stopBtn.setDisabled(True)  # 默认不可选中
 
         # 数据参数布局
         data_params_hbox = QHBoxLayout()
@@ -554,8 +416,8 @@ class MainWindow(QMainWindow):
         data_params_hbox.addWidget(self.current_channels_line_edit)
 
         # GPS时间组件
-        gps_from_label = Label('From')
-        gps_to_label = Label('To')
+        gps_from_label = Label('始')
+        gps_to_label = Label('止')
         self.gps_from_line_edit = LineEdit()
         self.gps_from_line_edit.setFocusPolicy(Qt.NoFocus)
         self.gps_to_line_edit = LineEdit()
@@ -588,11 +450,8 @@ class MainWindow(QMainWindow):
         main_window_widget.setLayout(main_window_hbox)
         self.setCentralWidget(main_window_widget)
 
-    def initParams(self):
-        """初始化默认参数"""
-
-        # 输出设置
-        np.set_printoptions(threshold=sys.maxsize, linewidth=sys.maxsize)  # 设置输出时每行的长度
+    def initLocalParams(self):
+        """初始化局部参数，即适用于单个文件，重新选择文件后更新"""
 
         # 默认错误为None
         self.err = None  # 捕捉到的错误
@@ -601,44 +460,33 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'player'):
             self.player.stop()
         setPicture(play_jpg, 'play.jpg', self.playBtn)
+        self.playBtn.setDisabled(False)
+        self.stopBtn.setDisabled(False)  # 设置播放按钮
         self.playerState = False  # 播放器否在播放
         self.hasWavFile = False  # 当前通道是否已创建了音频文件
         self.playerHasMedia = False  # 播放器是否已赋予了文件
 
-        # 读取文件，读取新文件时不更新，只通过菜单更新
-        if not hasattr(self, 'channel_number_step'):
-            self.channel_number_step = 1  # 通道号递增减步长
-        if not hasattr(self, 'files_read_number'):
-            self.files_read_number = 1  # 表格连续读取文件数
-
         # 通道数
-        self.channel_from_num = 0  # 起始通道
+        self.channel_from_num = 1  # 起始通道
         self.channel_to_num = self.current_channels  # 终止通道为当前通道数
-        self.channel_number = 0  # 当前通道
 
         # 采样数
-        self.sampling_times_from_num = 0  # 起始采样次数
+        self.sampling_times_from_num = 1  # 起始采样次数
         self.sampling_times_to_num = self.sampling_times  # 终止采样次数
-        self.current_sampling_times = self.sampling_times_to_num - self.sampling_times_from_num  # 当前采样次数
-
-        # 数据单位
-        self.data_units = ['phase difference', 'strain rate']  # 相位差与应变率相转化
-        self.data_unit_index = 0
-        self.strain_rate_action.setChecked(False)
-        self.phase_difference_action.setChecked(True)  # 默认输入数据单位为相位差
+        self.current_sampling_times = self.sampling_times_to_num - self.sampling_times_from_num + 1  # 当前采样次数
 
         # 信噪比
-        self.signal_channel_number = 0
-        self.noise_channel_number = 0
-        self.signal_start_sampling_time = 0
-        self.signal_stop_sampling_time = 1
-        self.noise_start_sampling_time = 0
-        self.noise_stop_sampling_time = 1
+        self.signal_channel_number = 1
+        self.noise_channel_number = 1
+        self.signal_start_sampling_time = 1
+        self.signal_stop_sampling_time = 2
+        self.noise_start_sampling_time = 1
+        self.noise_stop_sampling_time = 2
 
         # 二值图
         self.binary_image_flag = True  # 是否使用简单阈值
         self.binary_image_threshold = 120.0  # 阈值
-        self.binary_image_threshold_methods = {'Two Peaks': twoPeaks, 'OSTU': OSTU}  # 两种计算方法，双峰法及大津法
+        self.binary_image_threshold_methods = {'双峰法': twoPeaks, '大津法': OSTU}  # 两种计算方法，双峰法及大津法
         self.binary_image_threshold_method_index = 0  # 计算阈值方法的索引
 
         # 加窗
@@ -700,13 +548,10 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """退出时的提示"""
 
-        reply = QMessageBox.question(self, 'Tip', "Are you sure to quit?",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        reply = QMessageBox.question(self, 'Tip', '是否退出？', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
         # 判断返回值，如果点击的是Yes按钮，我们就关闭组件和应用，否则就忽略关闭事件
-        if reply == QMessageBox.Yes:
-            event.accept()
-        else:
-            event.ignore()
+        event.accept() if reply == QMessageBox.Yes else event.ignore()
 
     def removeTab(self, index):
         """关闭对应选项卡"""
@@ -741,6 +586,7 @@ class MainWindow(QMainWindow):
             self.temp_wavfile.setnframes(self.current_sampling_times)  # 设置帧数
             self.temp_wavfile.setcomptype('NONE', 'not compressed')  # 设置采样格式  无压缩
 
+            data /= np.max(np.abs(data))  # 归一化至[-1, 1]
             data *= 32768  # 转16位整数必要
             data = data.astype(np.int16).tobytes()  # 转16位整数类型后转比特
             self.temp_wavfile.writeframes(data)
@@ -779,39 +625,28 @@ class MainWindow(QMainWindow):
     def plotSingleChannelTime(self):
         """绘制单通道相位差-时间图"""
 
-        self.plot_single_channel_time_widget.clear()
+        data = self.data[self.channel_number - 1]
 
-        data = self.data[self.channel_number]
-
+        self.plot_single_channel_time_widget.plot_item.clear()
         self.plot_single_channel_time_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
                                                        self.sampling_times_to_num / self.sampling_rate)
         x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
                         self.current_sampling_times) / self.sampling_rate
-        if self.data_unit_index == 0:
-            self.plot_single_channel_time_widget.setTitle(
-                '<font face="Times New Roman" size="5">Phase Difference</font>')
-            self.plot_single_channel_time_widget.setLabel('left',
-                                                          '<font face="Times New Roman">Phase Difference(rad)</font>')
-        else:
-            self.plot_single_channel_time_widget.setTitle(
-                '<font face="Times New Roman" size="5">Strain Rate</font>')
-            self.plot_single_channel_time_widget.setLabel('left',
-                                                          '<font face="Times New Roman">Strain Rate(s^-1)</font>')
-
-        self.plot_single_channel_time_widget.plot(x, data, pen=QColor('blue'))
+        self.plot_single_channel_time_widget.setTitle('<font face="Microsoft YaHei" size="5">相位差图</font>')
+        self.plot_single_channel_time_widget.setLabel('left', '<font face="Microsoft YaHei">相位差（rad）</font>')
+        self.plot_single_channel_time_widget.draw(x, data, pen=QColor('blue'))
 
     def plotAmplitudeFrequency(self):
         """绘制幅值-频率图"""
 
-        self.plot_amplitude_frequency_widget.clear()
-
-        data = self.data[self.channel_number]
+        data = self.data[self.channel_number - 1]
 
         data = toAmplitude(data, self.current_sampling_times)
         x = np.arange(0, self.sampling_rate / 2, self.sampling_rate / self.current_sampling_times)
+        self.plot_amplitude_frequency_widget.plot_item.clear()
         self.plot_amplitude_frequency_widget.setXRange(0, self.sampling_rate / 2)
         y = fixDateLength(self.current_sampling_times)
-        self.plot_amplitude_frequency_widget.plot(x, data[:y // 2], pen=QColor('blue'))  # 只要半谱
+        self.plot_amplitude_frequency_widget.draw(x, data[:y // 2], pen=QColor('blue'))  # 只要半谱
 
     def plotGrayChannelsTime(self):
         """绘制灰度 通道-时间图"""
@@ -822,14 +657,14 @@ class MainWindow(QMainWindow):
         tr.scale(1 / self.sampling_rate, 1)
         tr.translate(self.sampling_times_from_num, 0)
 
-        self.plot_gray_scale_image.clear()
-        self.plot_gray_scale_image.setXRange(self.sampling_times_from_num / self.sampling_rate,
-                                             self.sampling_times_to_num / self.sampling_rate)
-        self.plot_gray_scale_image.setYRange(0, self.current_channels)
+        self.plot_gray_scale_widget.clear()
+        self.plot_gray_scale_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
+                                              self.sampling_times_to_num / self.sampling_rate)
+        self.plot_gray_scale_widget.setYRange(1, self.current_channels)
         item = pg.ImageItem()
         item.setImage(data.T)
         item.setTransform(tr)  # 将灰度图缩放移动
-        self.plot_gray_scale_image.addItem(item)
+        self.plot_gray_scale_widget.addItem(item)
 
     # """------------------------------------------------------------------------------------------------------------"""
     """文件路径区和文件列表调用函数"""
@@ -837,36 +672,29 @@ class MainWindow(QMainWindow):
     def changeFilePath(self):
         """更改显示的文件路径"""
 
-        self.file_path = QFileDialog.getExistingDirectory(self, "Select File Path", "C:/")  # 起始路径
-        if self.file_path != '':
+        file_path = QFileDialog.getExistingDirectory(self, '设置文件路径', '')  # 起始路径
+        if file_path != '':
+            self.file_path = file_path
             self.updateFile()
-        else:
-            del self.file_path
 
     def selectDataFromTable(self):
         """当从文件列表中选择文件时更新图像等"""
 
-        if not hasattr(self, 'files_read_number'):
-            self.files_read_number = 1
-
-        self.file_name = []
+        self.file_names = []
         item_index = self.files_table_widget.currentIndex().row()  # 获取当前点击的文件行索引
         for i in range(self.files_read_number):
             if item_index + i + 1 > self.files_table_widget.rowCount():  # 如果读取文件数大于该文件下面剩余的文件数就只读到最后一个文件
                 break
-            self.file_name.append(self.files_table_widget.item(item_index + i, 0).text())
+            self.file_names.append(self.files_table_widget.item(item_index + i, 0).text())
 
         self.readData()
-        self.initParams()
+        self.initLocalParams()
         self.update()
 
     def changeChannelNumber(self):
-        """更改通道号"""
+        """更改通道号，默认为1"""
 
-        if self.channel_number_spinbx.value() == '':  # 默认显示0
-            self.channel_number = 0
-        else:
-            self.channel_number = self.channel_number_spinbx.value()
+        self.channel_number = 1 if self.channel_number_spinbx.value() == '' else self.channel_number_spinbx.value()
 
     # """------------------------------------------------------------------------------------------------------------"""
     """更新函数"""
@@ -892,10 +720,10 @@ class MainWindow(QMainWindow):
     def updateDataParams(self):
         """更新数据相关参数"""
 
-        self.current_channels = self.channel_to_num - self.channel_from_num
-        self.current_sampling_times = self.sampling_times_to_num - self.sampling_times_from_num
+        self.current_channels = self.channel_to_num - self.channel_from_num + 1
+        self.current_sampling_times = self.sampling_times_to_num - self.sampling_times_from_num + 1
 
-        self.channel_number_spinbx.setRange(0, self.current_channels - 1)
+        self.channel_number_spinbx.setRange(1, self.current_channels)
         self.channel_number_spinbx.setValue(self.channel_number)
         self.sampling_rate_line_edit.setText(str(self.sampling_rate))
         self.current_sampling_times_line_edit.setText(str(self.current_sampling_times))
@@ -904,25 +732,17 @@ class MainWindow(QMainWindow):
     def updateDataGPSTime(self):
         """更新数据时间显示"""
 
-        # 更新开头文件GPS时间
-        year = str(self.time[0][0])[:-2]
-        month = str(self.time[0][1])[:-2]
-        day = str(self.time[0][2])[:-2]
-        hour = str(self.time[0][3])[:-2]
-        minute = str(self.time[0][4])[:-2]
-        second = str(self.time[0][5])
-        self.gps_from_line_edit.setText(
-            year + ' - ' + month + ' - ' + day + ' - ' + hour + ' - ' + minute + ' - ' + second)
+        from_time, to_time = [], []
+        for i in range(6):
+            ftime = str(self.time[0][i]) if i == 5 else str(self.time[0][i])[:-2]
+            ttime = str(self.time[-1][i]) if i == 5 else str(self.time[-1][i])[:-2]
+            from_time.append(ftime)
+            to_time.append(ttime)
+        from_time = ' - '.join(from_time)
+        to_time = ' - '.join(to_time)
 
-        # 更新末尾文件GPS时间
-        year = str(self.time[-1][0])[:-2]
-        month = str(self.time[-1][1])[:-2]
-        day = str(self.time[-1][2])[:-2]
-        hour = str(self.time[-1][3])[:-2]
-        minute = str(self.time[-1][4])[:-2]
-        second = str(self.time[-1][5])
-        self.gps_to_line_edit.setText(
-            year + ' - ' + month + ' - ' + day + ' - ' + hour + ' - ' + minute + ' - ' + second)
+        self.gps_from_line_edit.setText(from_time)  # 更新开头文件GPS时间
+        self.gps_to_line_edit.setText(to_time)  # 更新末尾文件GPS时间
 
     def updateImages(self):
         """更新4个随时更新的图像显示"""
@@ -941,55 +761,48 @@ class MainWindow(QMainWindow):
         self.updateImages()
 
     # """------------------------------------------------------------------------------------------------------------"""
-    """File-Import菜单调用函数"""
+    """文件-导入菜单调用函数"""
 
     def importData(self):
-        """导入多个数据文件后绘制各种图"""
+        """导入（多个）数据文件后更新参数和绘图等"""
 
-        self.file_name = QFileDialog.getOpenFileNames(self, 'Import', '', 'DAS data (*.dat)')  # 打开多个.dat文件
-        self.file_name = self.file_name[0]
-        if self.file_name != []:
-            self.file_path = os.path.dirname(str(self.file_name[0]))
+        self.file_names = QFileDialog.getOpenFileNames(self, '导入', '', 'DAS data (*.dat)')[0]  # 打开多个.dat文件
+        if self.file_names != []:
+            self.file_path = os.path.dirname(self.file_names[0])
 
             self.readData()
-            self.initParams()
+            self.initLocalParams()
             self.update()
 
     def readData(self):
         """读取数据，更新参数"""
 
-        if self.file_name:
-            time, data = [], []
-            for file in self.file_name:
-                with open(os.path.join(self.file_path, file), 'rb') as f:
-                    raw_data = np.fromfile(f, dtype='<f4')  # <低位在前高位在后（小端模式），f4：32位（单精度）浮点类型
-                    sampling_rate = int(raw_data[6])  # 采样率
-                    sampling_times = int(raw_data[7])  # 采样次数
-                    channels_num = int(raw_data[9])  # 通道数
-                    time.append(raw_data[:6])  # GPS时间
-                    data.append(raw_data[10:].reshape((channels_num, sampling_times)).T)
-            data = np.concatenate(data).T  # （通道数，采样次数）
+        time, data = [], []
+        for file in self.file_names:
+            with open(os.path.join(self.file_path, file), 'rb') as f:
+                raw_data = np.fromfile(f, dtype='<f4')  # <低位在前高位在后（小端模式），f4：32位（单精度）浮点类型
+                sampling_rate = int(raw_data[6])  # 采样率
+                sampling_times = int(raw_data[7])  # 采样次数
+                channels_num = int(raw_data[9])  # 通道数
+                time.append(raw_data[:6])  # GPS时间
+                data.append(raw_data[10:].reshape((channels_num, sampling_times)).T)
+        data = np.concatenate(data).T  # （通道数，采样次数）
 
-            # 初始化数据相关参数
-            self.sampling_rate = sampling_rate
-            self.sampling_times = sampling_times * len(self.file_name)
-            self.current_channels = channels_num
-            self.origin_data = data
-            self.data = self.origin_data
-            self.time = time
-
-            # 设置播放按钮
-            self.playBtn.setDisabled(False)
-            self.stopBtn.setDisabled(False)
+        # 初始化数据相关参数
+        self.sampling_rate = sampling_rate
+        self.sampling_times = sampling_times * len(self.file_names)
+        self.current_channels = channels_num
+        self.data, self.origin_data = data, data
+        self.time = time
 
     # """------------------------------------------------------------------------------------------------------------"""
-    """File-Export调用函数"""
+    """文件-导出调用函数"""
 
     def exportData(self):
         """导出数据"""
 
-        fpath, ftype = QFileDialog.getSaveFileName(self, 'Export', '',
-                                                   'csv(*.csv);;json(*.json);;pickle(*.pickle);;txt(*.txt);;xls(*.xls *.xlsx)')
+        fpath, ftype = QFileDialog.getSaveFileName(self, '导出', '', 'csv(*.csv);;json(*.json);;pickle(*.pickle);;'
+                                                                   'txt(*.txt);;xls(*.xls *.xlsx)')
 
         data = pd.DataFrame(self.data)  # 保存为df
 
@@ -1012,25 +825,25 @@ class MainWindow(QMainWindow):
 
         self.dialog = QDialog()
         self.dialog.setMaximumWidth(500)
-        self.dialog.setWindowTitle('Calculate SNR')
+        self.dialog.setWindowTitle('计算信噪比')
 
-        signal_channel_number_label = Label('Signal Channel Number')
+        signal_channel_number_label = Label('信号所在通道号')
         self.signal_channel_number_line_edit = OnlyNumLineEdit()
         self.signal_channel_number_line_edit.setText(str(self.signal_channel_number))
-        signal_start_sampling_time_label = Label('Start Sampling Time')
+        signal_start_sampling_time_label = Label('起始采样次数')
         self.signal_start_sampling_time_line_edit = OnlyNumLineEdit()
         self.signal_start_sampling_time_line_edit.setText(str(self.signal_start_sampling_time))
-        signal_stop_sampling_time_label = Label('Stop Sampling Time')
+        signal_stop_sampling_time_label = Label('终止采样次数')
         self.signal_stop_sampling_time_line_edit = OnlyNumLineEdit()
         self.signal_stop_sampling_time_line_edit.setText(str(self.signal_stop_sampling_time))
 
-        noise_channel_number_label = Label('Noise Channel Number')
+        noise_channel_number_label = Label('噪声所在通道号')
         self.noise_channel_number_line_edit = OnlyNumLineEdit()
         self.noise_channel_number_line_edit.setText(str(self.noise_channel_number))
-        noise_start_sampling_time_label = Label('Start Sampling Time')
+        noise_start_sampling_time_label = Label('起始采样次数')
         self.noise_start_sampling_time_line_edit = OnlyNumLineEdit()
         self.noise_start_sampling_time_line_edit.setText(str(self.noise_start_sampling_time))
-        noise_stop_sampling_time_label = Label('Stop Sampling Time')
+        noise_stop_sampling_time_label = Label('终止采样次数')
         self.noise_stop_sampling_time_line_edit = OnlyNumLineEdit()
         self.noise_stop_sampling_time_line_edit.setText(str(self.noise_stop_sampling_time))
 
@@ -1040,7 +853,7 @@ class MainWindow(QMainWindow):
         self.snr_line_edit.setFocusPolicy(Qt.NoFocus)
         snr_unit_label = Label('dB')
 
-        btn = PushButton('Calculate')
+        btn = PushButton('计算')
         btn.clicked.connect(self.updateCalculateSNRParams)
         btn.clicked.connect(self.calculateSNR)
 
@@ -1107,30 +920,30 @@ class MainWindow(QMainWindow):
                           self.signal_start_sampling_time:self.signal_stop_sampling_time + 1]
             noise_data = self.data[self.noise_channel_number,
                          self.noise_start_sampling_time:self.noise_stop_sampling_time + 1]
+
+            snr = round(10.0 * np.log10(np.sum(signal_data ** 2) / np.sum(noise_data ** 2)), 5)
+            self.snr_line_edit.setText(str(snr))
+
         except Exception as err:
             printError(err)
 
-        snr = round(10.0 * np.log10(np.sum(signal_data ** 2) / np.sum(noise_data ** 2)), 5)
-
-        self.snr_line_edit.setText(str(snr))
-
     # """------------------------------------------------------------------------------------------------------------"""
-    """Operation-Clip Data By Sampling Times调用函数"""
+    """操作-裁剪数据（采样次数）调用函数"""
 
     def clipSamplingTimesDialog(self):
         """调用裁剪数据对话框"""
 
         dialog = QDialog()
-        dialog.setWindowTitle('Clip Data')
+        dialog.setWindowTitle('裁剪数据（采样次数）')
 
-        from_label = Label('From')
+        from_label = Label('始')
         self.sampling_times_from = OnlyNumLineEdit()
         self.sampling_times_from.setText(str(self.sampling_times_from_num))
-        to_label = Label('To')
+        to_label = Label('止')
         self.sampling_times_to = OnlyNumLineEdit()
         self.sampling_times_to.setText(str(self.sampling_times_to_num))
 
-        btn = PushButton('OK')
+        btn = PushButton('确定')
         btn.clicked.connect(self.clipSamplingTimes)
         btn.clicked.connect(self.updateDataParams)
         btn.clicked.connect(self.updateImages)
@@ -1152,8 +965,7 @@ class MainWindow(QMainWindow):
     def clipSamplingTimes(self):
         """根据所选采样次数来裁剪数据"""
 
-        from_num = int(self.sampling_times_from.text())
-        to_num = int(self.sampling_times_to.text())
+        from_num, to_num = int(self.sampling_times_from.text()), int(self.sampling_times_to.text())
         list_num = [from_num, to_num]
 
         # 筛选小数为起始采样次数，大数作为终止采样次数
@@ -1172,27 +984,29 @@ class MainWindow(QMainWindow):
 
         # 捕获索引错误等
         try:
-            self.data = self.data[:, self.sampling_times_from_num:self.sampling_times_to_num]
+            self.data = self.origin_data[self.channel_from_num - 1:self.channel_to_num,
+                        self.sampling_times_from_num - 1:self.sampling_times_to_num]
+
         except Exception as err:
             printError(err)
 
     # """------------------------------------------------------------------------------------------------------------"""
-    """Clip Data By Channel调用函数"""
+    """裁剪数据（通道）调用函数"""
 
     def clipChannelsDialog(self):
         """按通道裁剪数据"""
 
         dialog = QDialog()
-        dialog.setWindowTitle('Clip Data')
+        dialog.setWindowTitle('裁剪数据（通道）')
 
-        from_label = Label('From:')
+        from_label = Label('始')
         self.channel_from = OnlyNumLineEdit()
         self.channel_from.setText(str(self.channel_from_num))
-        to_label = Label('To:')
+        to_label = Label('止')
         self.channel_to = OnlyNumLineEdit()
         self.channel_to.setText(str(self.channel_to_num))
 
-        btn = PushButton('OK')
+        btn = PushButton('确定')
         btn.clicked.connect(self.clipChannels)
         btn.clicked.connect(self.updateDataParams)
         btn.clicked.connect(self.updateImages)
@@ -1215,8 +1029,7 @@ class MainWindow(QMainWindow):
     def clipChannels(self):
         """以通道数裁剪"""
 
-        from_num = int(self.channel_from.text())
-        to_num = int(self.channel_to.text())
+        from_num, to_num = int(self.channel_from.text()), int(self.channel_to.text())
         list_num = [from_num, to_num]
 
         # 筛选小数为起始通道，大数为终止通道
@@ -1235,32 +1048,11 @@ class MainWindow(QMainWindow):
 
         # 捕获索引错误等
         try:
-            self.data = self.data[self.channel_from_num:self.channel_to_num]
+            self.data = self.origin_data[self.channel_from_num - 1:self.channel_to_num,
+                        self.sampling_times_from_num - 1:self.sampling_times_to_num]
+
         except Exception as err:
             printError(err)
-
-    # """------------------------------------------------------------------------------------------------------------"""
-    """转换数据单位调用的函数"""
-
-    def convert2PhaseDifference(self):
-        """应变率转为相位差"""
-
-        self.phase_difference_action.setChecked(True)
-        self.strain_rate_action.setChecked(False)
-        if self.data_unit_index == 1:
-            self.data_unit_index = 0
-            self.data = convertDataUnit(self.data, self.sampling_rate, src='SR', aim='PD')
-            self.updateImages()
-
-    def convert2StrainRate(self):
-        """相位差转换为应变率"""
-
-        self.strain_rate_action.setChecked(True)
-        self.phase_difference_action.setChecked(False)
-        if self.data_unit_index == 0:
-            self.data_unit_index = 1
-            self.data = convertDataUnit(self.data, self.sampling_rate, src='PD', aim='SR')
-            self.updateImages()
 
     # """------------------------------------------------------------------------------------------------------------"""
     """更改读取通道号步长、读取文件数调用的函数"""
@@ -1269,14 +1061,14 @@ class MainWindow(QMainWindow):
         """改变通道号的步长"""
 
         dialog = QDialog()
-        dialog.setWindowTitle('Change Channel Number Step')
+        dialog.setWindowTitle('设置通道切换步长')
 
-        channel_number_step_label = Label('Channel Number Step')
+        channel_number_step_label = Label('步长')
         self.channel_number_step_line_edit = OnlyNumLineEdit()
-        self.channel_number_step_line_edit.setToolTip('Change the step when changing channel number')
+        self.channel_number_step_line_edit.setToolTip('切换通道时的步长')
         self.channel_number_step_line_edit.setText(str(self.channel_number_step))
 
-        btn = PushButton('OK')
+        btn = PushButton('确定')
         btn.clicked.connect(self.updateChannelNumberStep)
         btn.clicked.connect(dialog.close)
 
@@ -1302,15 +1094,14 @@ class MainWindow(QMainWindow):
         """从表格选择文件时读取的文件数"""
 
         dialog = QDialog()
-        dialog.setWindowTitle('Change Files Read Number')
+        dialog.setWindowTitle('设置文件读取数量')
 
-        files_read_number_label = Label('Files Read Number')
+        files_read_number_label = Label('文件读取数量')
         self.files_read_number_line_edit = OnlyNumLineEdit()
-        self.files_read_number_line_edit.setToolTip(
-            'Number of files read when choosing file from the table, counting from the chosen one.')
+        self.files_read_number_line_edit.setToolTip('设置从表格选中文件时的读取数量，从选中的文件开始算起')
         self.files_read_number_line_edit.setText(str(self.files_read_number))
 
-        btn = PushButton('OK')
+        btn = PushButton('确定')
         btn.clicked.connect(self.updateFilesReadNumber)
         btn.clicked.connect(dialog.close)
 
@@ -1337,22 +1128,22 @@ class MainWindow(QMainWindow):
         """二值图设置组件"""
 
         dialog = QDialog()
-        dialog.setWindowTitle('Plot Binary Image')
+        dialog.setWindowTitle('二值图')
 
-        self.binary_image_input_radiobtn = RadioButton('Threshold')
+        self.binary_image_input_radiobtn = RadioButton('阈值')
         self.binary_image_input_radiobtn.setChecked(self.binary_image_flag)
 
         self.binary_image_threshold_line_edit = NumPointLineEdit()
         self.binary_image_threshold_line_edit.setText(str(self.binary_image_threshold))
 
-        self.binary_image_method_radiobtn = RadioButton('Method')
+        self.binary_image_method_radiobtn = RadioButton('计算方法')
         self.binary_image_method_radiobtn.setChecked(not self.binary_image_flag)
 
         self.binary_image_method_combx = ComboBox()
         self.binary_image_method_combx.addItems(self.binary_image_threshold_methods.keys())
         self.binary_image_method_combx.setCurrentIndex(self.binary_image_threshold_method_index)
 
-        btn = PushButton('OK')
+        btn = PushButton('确定')
         btn.clicked.connect(self.updateBinaryImageParams)
         btn.clicked.connect(self.plotBinaryImage)
         btn.clicked.connect(dialog.close)
@@ -1397,9 +1188,8 @@ class MainWindow(QMainWindow):
     def plotBinaryImage(self):
         """绘制二值图"""
 
-        binary_image_widget = MyPlotWidget('Binary Image', 'Sampling Times', 'Channel')
-        self.tab_widget.addTab(binary_image_widget,
-                               f'Binary Image - Threshold={self.binary_image_threshold}')  # 添加二值图tab
+        binary_image_widget = MyPlotWidget('二值图', '时间（s）', '通道', check_mouse=False)
+        self.tab_widget.addTab(binary_image_widget, f'二值图 - 阈值={self.binary_image_threshold}')  # 添加二值图tab
 
         # 阈值化
         binary_data = normalizeToGrayScale(self.data)
@@ -1408,7 +1198,7 @@ class MainWindow(QMainWindow):
 
         binary_image_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
                                       self.sampling_times_to_num / self.sampling_rate)
-        binary_image_widget.setYRange(0, self.current_channels)
+        binary_image_widget.setYRange(1, self.current_channels)
 
         tr = QTransform()
         tr.scale(1 / self.sampling_rate, 1)
@@ -1425,29 +1215,25 @@ class MainWindow(QMainWindow):
         """绘制选中的时域特征图像"""
 
         features = calculateTimeDomainFeatures(self.data)
-        self.plotFeature(self.time_domain_chars_text, features)
+        self.plotFeature(features)
 
     def plotFrequencyDomainFeature(self):
         """绘制选中的频域特征图像"""
 
         features = calculateFrequencyDomainFeatures(self.data, self.sampling_rate)
-        self.plotFeature(self.fre_domain_chars_text, features)
+        self.plotFeature(features)
 
-    def plotFeature(self, text_list, features):
+    def plotFeature(self, features):
         """获取要计算的数据特征名字和值"""
 
         feature_name = self.plot_data_features_menu.sender().text()
-        for key, value in text_list.items():
-            if value == feature_name:
-                feature_text = key
-        index = [index for index, value in enumerate(text_list) if value == feature_text]  # 获取菜单中被点击特征的索引
-        feature_value = features[index[0]]
-        plot_widget = MyPlotWidget(feature_name, 'Channel', '')
+        feature = features[feature_name]
 
-        x = np.linspace(0, self.current_channels, self.current_channels)
-        plot_widget.setXRange(0, self.current_channels)
-        plot_widget.plot(x, feature_value, pen=QColor('blue'))
-        self.tab_widget.addTab(plot_widget, f'{feature_name} - Window Method={self.window_text}')
+        plot_widget = MyPlotWidget(feature_name + '图', '通道', '')
+        x = np.linspace(1, self.current_channels, self.current_channels)
+        plot_widget.setXRange(1, self.current_channels)
+        plot_widget.draw(x, feature, pen=QColor('blue'))
+        self.tab_widget.addTab(plot_widget, f'{feature_name}图 - 窗口类型={self.window_text}')
 
     # """------------------------------------------------------------------------------------------------------------"""
     """绘制多通道云图调用函数"""
@@ -1455,16 +1241,16 @@ class MainWindow(QMainWindow):
     def plotMultiChannelImage(self):
         """绘制多通道云图"""
 
-        plot_widget = MyPlotWidget('MultiChannel Image', 'Time(s)', 'Channel')
+        plot_widget = MyPlotWidget('多通道云图', '时间（s）', '通道', check_mouse=False)
         plot_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
                               self.sampling_times_to_num / self.sampling_rate)
-        plot_widget.setYRange(0, self.current_channels)
+        plot_widget.setYRange(1, self.current_channels)
         x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
                         self.current_sampling_times) / self.sampling_rate
         colors = cycle(['red', 'lime', 'deepskyblue', 'yellow', 'plum', 'gold', 'blue', 'fuchsia', 'aqua', 'orange'])
-        for i in range(self.current_channels):
-            plot_widget.plot(x, self.data[i] + i, pen=QColor(next(colors)))  # 根据通道数个位选择颜色绘图
-        self.tab_widget.addTab(plot_widget, 'Channels - Time')
+        for i in range(1, self.current_channels + 1):
+            plot_widget.draw(x, self.data[i - 1] + i, pen=QColor(next(colors)))  # 根据通道数个位选择颜色绘图
+        self.tab_widget.addTab(plot_widget, '多通道云图')
 
     # """------------------------------------------------------------------------------------------------------------"""
     """绘制应变图调用函数"""
@@ -1472,18 +1258,17 @@ class MainWindow(QMainWindow):
     def plotStrain(self):
         """将相位差转为应变率再积分"""
 
-        if self.data_unit_index == 0:
-            data = convertDataUnit(self.data, self.sampling_rate, src='PD', aim='S')[self.channel_number]
-        else:
-            data = convertDataUnit(self.data, self.sampling_rate, src='SR', aim='S')[self.channel_number]
+        data = self.data[self.channel_number - 1]
+        x_axis = np.linspace(1, self.current_sampling_times, self.current_sampling_times)
+        data = integrate.cumtrapz(data, x_axis, initial=0) * 1e6
 
         x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
                         self.current_sampling_times) / self.sampling_rate
-        plot_widget = MyPlotWidget('Strain Image', 'Time(s)', 'Strain(με)', grid=True)
+        plot_widget = MyPlotWidget('应变图', '时间（s）', '应变（με）', grid=True)
         plot_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
                               self.sampling_times_to_num / self.sampling_rate)
-        plot_widget.plot(x, data, pen=QColor('blue'))
-        self.tab_widget.addTab(plot_widget, f'Strain Image - Channel Number={self.channel_number}')
+        plot_widget.draw(x, data, pen=QColor('blue'))
+        self.tab_widget.addTab(plot_widget, f'应变图 - 通道号={self.channel_number}')
 
     # """------------------------------------------------------------------------------------------------------------"""
     """绘制PSD调用函数"""
@@ -1491,50 +1276,48 @@ class MainWindow(QMainWindow):
     def plotPSD(self):
         """绘制psd图线"""
 
-        data = self.data[self.channel_number]
+        data = self.data[self.channel_number - 1]
         data = self.window_method(self.current_sampling_times) * data
         data = np.abs(np.fft.fft(data))
         y = fixDateLength(self.current_sampling_times)
         data = 20.0 * np.log10(data ** 2 / self.current_sampling_times)[:y // 2]  # 转dB单位
 
-        plot_widget = MyPlotWidget('PSD', 'Frequency(Hz)', 'Power/Frequency(dB/Hz)', grid=True)
+        plot_widget = MyPlotWidget('功率谱密度图', '频率（Hz）', '功率/频率（dB/Hz）', grid=True)
         x = np.arange(0, self.sampling_rate / 2, self.sampling_rate / self.current_sampling_times)
         plot_widget.setXRange(0, self.sampling_rate / 2)
         plot_widget.setLogMode(x=True)
-        plot_widget.plot(x, data, pen=QColor('blue'))
-        self.tab_widget.addTab(plot_widget, f'PSD - Window Method={self.window_text}\n'
-                                            f'Channel Number={self.channel_number}')
+        plot_widget.draw(x, data, pen=QColor('blue'))
+        self.tab_widget.addTab(plot_widget, f'功率谱密度图 - 窗口类型={self.window_text}\t'
+                                            f'通道号={self.channel_number}')
 
     def plot2dPSD(self):
         """绘制2dpsd谱"""
 
         figure = plt.figure()
         widget = FigureCanvas(figure)
-        self.tab_widget.addTab(widget,
-                               f'2D PSD - Window Method={self.window_text}\n'
-                               f'Channel Number={self.channel_number}')
-        data = self.data[self.channel_number]
+        self.tab_widget.addTab(widget, f'功率谱密度色块图 - 窗口类型={self.window_text}\t'
+                                       f'通道号={self.channel_number}')
+        data = self.data[self.channel_number - 1]
         ax = plt.axes()
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='density', mode='psd')
         plt.pcolormesh(t, f, 20.0 * np.log10(Sxx), cmap='rainbow')
-        plt.colorbar(label='Power/Frequency(dB/Hz)')
-        plt.title('2D PSD')
-        plt.xlabel('Time(s)')
-        plt.ylabel('Frequency(Hz)')
+        plt.colorbar(label='功率/频率（dB/Hz）')
+        plt.title('功率谱密度色块图')
+        plt.xlabel('时间（s）')
+        plt.ylabel('频率（Hz）')
         plt.xlim(0, self.current_sampling_times / self.sampling_rate)
 
     def plot3dPSD(self):
         """绘制3dpsd"""
 
-        data = self.data[self.channel_number]
+        data = self.data[self.channel_number - 1]
         figure = plt.figure()
         widget = FigureCanvas(figure)
-        self.tab_widget.addTab(widget,
-                               f'3D PSD - Window Method={self.window_text}\n'
-                               f'Channel Number={self.channel_number}')
+        self.tab_widget.addTab(widget, f'三维功率谱密度图 - 窗口类型={self.window_text}\t'
+                                       f'通道号={self.channel_number}')
 
         ax = figure.add_subplot(projection='3d')
         ax.tick_params(axis='both', which='both', direction='in')
@@ -1542,11 +1325,11 @@ class MainWindow(QMainWindow):
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='density', mode='psd')
         im = ax.plot_surface(f[:, None], t[None, :], 20.0 * np.log10(Sxx), cmap='rainbow')
-        # plt.colorbar(im, ax=ax, label='Power/Frequency(dB/Hz)', pad=0.2)
-        ax.set_title('3D PSD')
-        ax.set_xlabel('Frequency(Hz)')
-        ax.set_ylabel('Time(s)')
-        ax.set_zlabel('Power/Frequency(dB/Hz)')
+        # plt.colorbar(im, ax=ax, label='功率/频率（dB/Hz）', pad=0.2)
+        ax.set_title('三维功率谱密度图')
+        ax.set_xlabel('频率（Hz）')
+        ax.set_ylabel('时间（s）')
+        ax.set_zlabel('功率/频率（dB/Hz）')
         plt.xlim(0, self.sampling_rate / 2)
 
     # """------------------------------------------------------------------------------------------------------------"""
@@ -1555,46 +1338,46 @@ class MainWindow(QMainWindow):
     def plotMagnitudeSpectrum(self):
         """绘制幅度谱"""
 
-        data = self.data[self.channel_number]
+        data = self.data[self.channel_number - 1]
         y = fixDateLength(self.current_sampling_times)
         data = self.window_method(self.current_sampling_times) * data
         data = 20.0 * np.log10(np.abs(np.fft.fft(data)) / self.current_sampling_times)[:y // 2]
 
-        plot_widget = MyPlotWidget('Magnitude Spectrum', 'Frequency(Hz)', 'Magnitude(dB)', grid=True)
+        plot_widget = MyPlotWidget('幅度谱', '频率（Hz）', '幅度（dB）', grid=True)
         x = np.arange(0, self.sampling_rate / 2, self.sampling_rate / self.current_sampling_times)
-        plot_widget.plot(x, data, pen=QColor('blue'))
-        self.tab_widget.addTab(plot_widget, f'Magnitude Spectrum - Window Method={self.window_text}\n'
-                                            f'Channel Number={self.channel_number}')
+        plot_widget.draw(x, data, pen=QColor('blue'))
+        self.tab_widget.addTab(plot_widget, f'幅度谱 - 窗口类型={self.window_text}\t'
+                                            f'通道号={self.channel_number}')
 
     def plot2dMagnitudeSpectrum(self):
         """绘制2d幅度谱"""
 
         figure = plt.figure()
         widget = FigureCanvas(figure)
-        self.tab_widget.addTab(widget, f'2D Magnitude Spectrum - Window Method={self.window_text}\n'
-                                       f'Channel Number={self.channel_number}')
+        self.tab_widget.addTab(widget, f'幅度谱色块图 - 窗口类型={self.window_text}\t'
+                                       f'通道号={self.channel_number}')
 
-        data = self.data[self.channel_number]
+        data = self.data[self.channel_number - 1]
         ax = plt.axes()
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='spectrum', mode='magnitude')
         plt.pcolormesh(t, f, 20.0 * np.log10(Sxx), cmap='rainbow')
-        plt.colorbar(label='Magnitude(dB)')
-        plt.title('2D Magnitude Spectrum')
-        plt.xlabel('Time(s)')
-        plt.ylabel('Frequency(Hz)')
+        plt.colorbar(label='幅度（dB）')
+        plt.title('幅度谱色块图')
+        plt.xlabel('时间（s）')
+        plt.ylabel('频率（Hz）')
         plt.xlim(0, self.current_sampling_times / self.sampling_rate)
 
     def plot3dMagnitudeSpectrum(self):
         """绘制3d幅度谱"""
 
-        data = self.data[self.channel_number]
+        data = self.data[self.channel_number - 1]
         figure = plt.figure()
         widget = FigureCanvas(figure)
-        self.tab_widget.addTab(widget, f'3D Magnitude Spectrum - Window Method={self.window_text}\n'
-                                       f'Channel Number={self.channel_number}')
+        self.tab_widget.addTab(widget, f'三维幅度谱 - 窗口类型={self.window_text}\t'
+                                       f'通道号={self.channel_number}')
 
         ax = figure.add_subplot(projection='3d')
         ax.tick_params(axis='both', which='both', direction='in')
@@ -1602,56 +1385,56 @@ class MainWindow(QMainWindow):
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='spectrum', mode='magnitude')
         im = ax.plot_surface(f[:, None], t[None, :], 20.0 * np.log10(Sxx), cmap='rainbow')
-        # plt.colorbar(im, ax=ax, label='Magnitude(dB)', pad=0.2)
-        ax.set_title('3D Magnitude Spectrum')
-        ax.set_xlabel('Frequency(Hz)')
-        ax.set_ylabel('Time(s)')
-        ax.set_zlabel('Magnitude(dB)')
+        # plt.colorbar(im, ax=ax, label='幅度（dB）', pad=0.2)
+        ax.set_title('三维幅度谱')
+        ax.set_xlabel('频率（Hz）')
+        ax.set_ylabel('时间（s）')
+        ax.set_zlabel('幅度（dB）')
         plt.xlim(0, self.sampling_rate / 2)
 
     def plotAngleSpectrum(self):
         """绘制相位谱"""
 
-        data = self.data[self.channel_number]
+        data = self.data[self.channel_number - 1]
         y = fixDateLength(self.current_sampling_times)
         data = self.window_method(self.current_sampling_times) * data
         data = np.angle(np.fft.fft(data))[:y // 2]
 
-        plot_widget = MyPlotWidget('Angle Spectrum', 'Frequency(Hz)', 'Angle(rad)', grid=True)
+        plot_widget = MyPlotWidget('角度谱', '频率（Hz）', '角度（rad）', grid=True)
         x = np.arange(0, self.sampling_rate / 2, self.sampling_rate / self.current_sampling_times)
-        plot_widget.plot(x, data, pen=QColor('blue'))
-        self.tab_widget.addTab(plot_widget, f'Angle Spectrum - Window Method={self.window_text}\n'
-                                            f'Channel Number={self.channel_number}')
+        plot_widget.draw(x, data, pen=QColor('blue'))
+        self.tab_widget.addTab(plot_widget, f'角度谱 - 窗口类型={self.window_text}\t'
+                                            f'通道号={self.channel_number}')
 
     def plot2dAngleSpectrum(self):
         """绘制2d相位谱"""
 
         figure = plt.figure()
         widget = FigureCanvas(figure)
-        self.tab_widget.addTab(widget, f'2D Angle Spectrum - Window Method={self.window_text}\n'
-                                       f'Channel Number={self.channel_number}')
+        self.tab_widget.addTab(widget, f'角度谱色块图 - 窗口类型={self.window_text}\t'
+                                       f'通道号={self.channel_number}')
 
-        data = self.data[self.channel_number]
+        data = self.data[self.channel_number - 1]
         ax = plt.axes()
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='spectrum', mode='angle')
         plt.pcolormesh(t, f, Sxx, cmap='rainbow')
-        plt.colorbar(label='Angle(rad)')
-        plt.title('2D Angle Spectrum')
-        plt.xlabel('Time(s)')
-        plt.ylabel('Frequency(Hz)')
+        plt.colorbar(label='角度（rad）')
+        plt.title('角度谱色块图')
+        plt.xlabel('时间（s）')
+        plt.ylabel('频率（Hz）')
         plt.xlim(0, self.current_sampling_times / self.sampling_rate)
 
     def plot3dAngleSpectrum(self):
         """绘制3d相位谱"""
 
-        data = self.data[self.channel_number]
+        data = self.data[self.channel_number - 1]
         figure = plt.figure()
         widget = FigureCanvas(figure)
-        self.tab_widget.addTab(widget, f'3D Angle Spectrum - Window Method={self.window_text}\n'
-                                       f'Channel Number={self.channel_number}')
+        self.tab_widget.addTab(widget, f'三维角度谱 - 窗口类型={self.window_text}\t'
+                                       f'通道号={self.channel_number}')
 
         ax = figure.add_subplot(projection='3d')
         ax.tick_params(axis='both', which='both', direction='in')
@@ -1659,38 +1442,38 @@ class MainWindow(QMainWindow):
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='spectrum', mode='angle')
         im = ax.plot_surface(f[:, None], t[None, :], Sxx, cmap='rainbow')
-        # plt.colorbar(im, ax=ax, label='Angle(rad)', pad=0.2)
-        ax.set_title('3D Angle Spectrum')
-        ax.set_xlabel('Frequency(Hz)')
-        ax.set_ylabel('Time(s)')
-        ax.set_zlabel('Angle(rad)')
+        # plt.colorbar(im, ax=ax, label='角度（rad）', pad=0.2)
+        ax.set_title('三维角度谱')
+        ax.set_xlabel('频率（Hz）')
+        ax.set_ylabel('时间（s）')
+        ax.set_zlabel('角度（rad）')
         plt.xlim(0, self.sampling_rate / 2)
 
     # """------------------------------------------------------------------------------------------------------------"""
-    """Operation-Window Options调用函数"""
+    """操作-加窗设置调用函数"""
 
     def windowOptionsDialog(self):
-        """Window Options调用窗口"""
+        """加窗设置调用窗口"""
 
         dialog = QDialog()
-        dialog.setWindowTitle('Window Options')
+        dialog.setWindowTitle('加窗设置')
 
-        window_method_label = Label('Window Method')
+        window_method_label = Label('窗口类型')
         self.window_method_combx = ComboBox()
         self.window_method_combx.addItems(self.window_methods.keys())
         self.window_method_combx.setCurrentText(self.window_text)
 
-        window_length_label = Label('Window Length')
+        window_length_label = Label('窗长')
         self.window_length_line_edit = OnlyNumLineEdit()
         self.window_length_line_edit.setText(str(self.window_length))
-        self.window_length_line_edit.setToolTip("Usually 2^n")
+        self.window_length_line_edit.setToolTip('通常为2的倍数')
 
-        window_overlap_size_ratio_label = Label('Window Overlap Size')
+        window_overlap_size_ratio_label = Label('窗口重叠比例')
         self.window_overlap_size_ratio_line_edit = NumPointLineEdit()
         self.window_overlap_size_ratio_line_edit.setText(str(self.window_overlap_size_ratio))
-        self.window_overlap_size_ratio_line_edit.setToolTip('Overlap ratio between adjacent windows, between [0, 1)')
+        self.window_overlap_size_ratio_line_edit.setToolTip('相邻窗口的重叠比例，介于[0, 1)')
 
-        btn = PushButton('OK')
+        btn = PushButton('确定')
         btn.clicked.connect(self.updateWindowOptionsParams)
         btn.clicked.connect(self.plotSingleChannelTime)
         btn.clicked.connect(self.plotAmplitudeFrequency)
@@ -1728,7 +1511,7 @@ class MainWindow(QMainWindow):
         if float(self.window_overlap_size_ratio_line_edit.text()) < 0:
             self.window_overlap_size_ratio = 0
         elif float(self.window_overlap_size_ratio_line_edit.text()) >= 1:
-            self.window_overlap_size_ratio = 0.99
+            self.window_overlap_size_ratio = 0.9999
         else:
             self.window_overlap_size_ratio = float(self.window_overlap_size_ratio_line_edit.text())
         self.window_overlap_size = int(round(self.window_overlap_size_ratio * self.window_length))
@@ -1740,17 +1523,18 @@ class MainWindow(QMainWindow):
         """变更更新数据菜单"""
 
         if self.if_update_data:
-            self.update_data_action.setText('Update Data(False)')
+            self.update_data_action.setText('更新数据（否）')
             self.if_update_data = False
         else:
-            self.update_data_action.setText('Update Data(True)')
+            self.update_data_action.setText('更新数据（是）')
             self.if_update_data = True
 
     def ifUpdateData(self, flag, data):
         """判断是否在滤波之后更新数据"""
 
         if flag:
-            self.data[self.channel_number] = data
+            self.origin_data[self.channel_number] = data
+            self.data = self.origin_data
             self.updateImages()
 
     # """------------------------------------------------------------------------------------------------------------"""
@@ -1761,21 +1545,18 @@ class MainWindow(QMainWindow):
 
         x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
                         self.current_sampling_times) / self.sampling_rate
-        if self.data_unit_index == 0:
-            data_widget = MyPlotWidget(f'{title}', 'Time(s)', 'Phase Difference(rad)', grid=True)
-        else:
-            data_widget = MyPlotWidget(f'{title}', 'Time(s)', 'Strain Rate(s^-1)', grid=True)
+        data_widget = MyPlotWidget(f'{title}', '时间（s）', '相位差（rad）', grid=True)
 
         data_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
                               self.sampling_times_to_num / self.sampling_rate)
-        data_widget.plot(x, data, pen=QColor('blue'))
+        data_widget.draw(x, data, pen=QColor('blue'))
 
         data = toAmplitude(data, self.current_sampling_times)
         x = np.arange(0, self.sampling_rate / 2, self.sampling_rate / self.current_sampling_times)
-        fre_amp_widget = MyPlotWidget('Amplitude - Frequency', 'Frequency(Hz)', 'Amplitude', grid=True)
+        fre_amp_widget = MyPlotWidget('幅值图', '频率（Hz）', '幅值', grid=True)
         fre_amp_widget.setXRange(0, self.sampling_rate / 2)
         y = fixDateLength(self.current_sampling_times)
-        fre_amp_widget.plot(x, data[:y // 2], pen=QColor('blue'))
+        fre_amp_widget.draw(x, data[:y // 2], pen=QColor('blue'))
 
         combine_widget = QWidget()
         vbox = QVBoxLayout()
@@ -1786,34 +1567,29 @@ class MainWindow(QMainWindow):
         return combine_widget
 
     # """------------------------------------------------------------------------------------------------------------"""
-    """Filter-Detrend调用函数"""
+    """滤波-Detrend调用函数"""
 
-    def detrendData(self):
+    def detrendData(self, detrend_type):
         """去趋势"""
 
-        data = self.data[self.channel_number]
-        detrend_type = self.detrend_menu.sender().text().lower()
+        data = self.data[self.channel_number - 1]
         data = detrend(data, type=detrend_type)
 
-        combine_widget = self.initTwoPlotWidgets(data, 'Detrend')
+        combine_widget = self.initTwoPlotWidgets(data, '去趋势')
 
-        self.tab_widget.addTab(combine_widget,
-                               f'Detrend - type={detrend_type}\n'
-                               f'Channel Number={self.channel_number}')
+        self.tab_widget.addTab(combine_widget, f'去趋势 - type={detrend_type}\t'
+                                               f'通道号={self.channel_number}')
 
         self.ifUpdateData(self.if_update_data, data)
 
     # """------------------------------------------------------------------------------------------------------------"""
-    """Filter-EMD调用函数"""
+    """滤波-EMD调用函数"""
 
     def plotEMD(self):
         """绘制emd分解图和重构图"""
 
         self.emd_method = self.emd_menu.sender().text()
-        data = self.data[self.channel_number]
-
-        if self.data_unit_index == 1:  # 如果当前单位是应变率，数据较小需乘大一点
-            data *= 10e6
+        data = self.data[self.channel_number - 1]
 
         try:
             if self.emd_method == 'EMD':
@@ -1832,14 +1608,10 @@ class MainWindow(QMainWindow):
                               noise_kind=noise_kind, range_thr=self.ceemdan_range_thr,
                               total_power_thr=self.ceemdan_total_power_thr)
                 self.imfs_res = emd.ceemdan(data, max_imf=self.imfs_res_num - 1)
+
         except Exception as err:
             printError(err)
 
-        if self.data_unit_index == 1:  # 如果当前数据单位是应变率，之前乘大了，先处理到原来的数量级
-            self.imfs_res /= 10e6
-
-        x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
-                        self.current_sampling_times) / self.sampling_rate
         if self.emd_options_flag:
             wgt = QWidget()
             wgt.setFixedWidth(self.tab_widget.width())
@@ -1848,17 +1620,16 @@ class MainWindow(QMainWindow):
             hbox = QHBoxLayout()
             scroll_area = QScrollArea()
 
-            pw_time_list = []
-            pw_fre_list = []
+            pw_time_list, pw_fre_list = [], []
             for i in range(len(self.imfs_res)):
                 if i == 0:
-                    pw_time = MyPlotWidget(f'{self.emd_method} Decompose - Time Domain', '', 'IMF1(rad)')
-                    pw_fre = MyPlotWidget(f'{self.emd_method} Decompose - Frequency Domain', '', 'IMF1')
+                    pw_time = MyPlotWidget(f'{self.emd_method}分解 - 时域', '', 'IMF1（rad）')
+                    pw_fre = MyPlotWidget(f'{self.emd_method}分解 - 频域', '', 'IMF1')
                 elif i == len(self.imfs_res) - 1:
-                    pw_time = MyPlotWidget('', 'Time(s)', f'Residual(rad)')
-                    pw_fre = MyPlotWidget('', 'Frequency(Hz)', f'Residual')
+                    pw_time = MyPlotWidget('', '时间（s）', f'Residual（rad）')
+                    pw_fre = MyPlotWidget('', '频率（Hz）', f'Residual')
                 else:
-                    pw_time = MyPlotWidget('', '', f'IMF{i + 1}(rad)')
+                    pw_time = MyPlotWidget('', '', f'IMF{i + 1}（rad）')
                     pw_fre = MyPlotWidget('', '', f'IMF{i + 1}')
 
                 x_time = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
@@ -1866,7 +1637,7 @@ class MainWindow(QMainWindow):
                 pw_time.setXRange(self.sampling_times_from_num / self.sampling_rate,
                                   self.sampling_times_to_num / self.sampling_rate)
                 pw_time.setFixedHeight(150)
-                pw_time.plot(x_time, self.imfs_res[i], pen=QColor('blue'))
+                pw_time.draw(x_time, self.imfs_res[i], pen=QColor('blue'))
                 pw_time_list.append(pw_time)
                 pw_time_list[i].setXLink(pw_time_list[0])  # 设置时域x轴对应
 
@@ -1875,7 +1646,7 @@ class MainWindow(QMainWindow):
                 pw_fre.setXRange(0, self.sampling_rate / 2)
                 pw_fre.setFixedHeight(150)
                 y = fixDateLength(self.current_sampling_times)
-                pw_fre.plot(x_fre, data[:y // 2], pen=QColor('blue'))
+                pw_fre.draw(x_fre, data[:y // 2], pen=QColor('blue'))
                 pw_fre_list.append(pw_fre)
                 pw_fre_list[i].setXLink(pw_fre_list[0])  # 设置频域x轴对应
 
@@ -1886,9 +1657,8 @@ class MainWindow(QMainWindow):
             hbox.addLayout(vbox2)
             wgt.setLayout(hbox)
             scroll_area.setWidget(wgt)
-            self.tab_widget.addTab(scroll_area,
-                                   f'{self.emd_method} - Decompose: Number of IMF={self.imfs_res_num - 1}\n'
-                                   f'Channel Number={self.channel_number}')
+            self.tab_widget.addTab(scroll_area, f'{self.emd_method} - 分解: IMF数量={self.imfs_res_num - 1}\t'
+                                                f'通道号={self.channel_number}')
         else:
             reconstruct_imf = [int(i) for i in re.findall('\d+', self.reconstruct_nums)]  # 映射为整数类型
             data = np.zeros(self.imfs_res[0].shape)
@@ -1896,9 +1666,9 @@ class MainWindow(QMainWindow):
                 imf_num = reconstruct_imf[i]
                 data += self.imfs_res[imf_num]  # 重构数据
 
-            combine_widget = self.initTwoPlotWidgets(data, self.emd_method + ' Reconstruct')
+            combine_widget = self.initTwoPlotWidgets(data, self.emd_method + '重构')
 
-            self.tab_widget.addTab(combine_widget, f'Reconstruct: Number of IMF={reconstruct_imf}')
+            self.tab_widget.addTab(combine_widget, f'{self.emd_method} - 重构: 重构IMF={reconstruct_imf}')
 
             self.ifUpdateData(self.if_update_data, data)
 
@@ -1909,23 +1679,22 @@ class MainWindow(QMainWindow):
 
         dialog = QDialog()
         dialog.resize(600, 200)
-        dialog.setWindowTitle('EMD Options')
+        dialog.setWindowTitle('EMD设置')
 
-        shared_options_label = Label('Shared Options')
+        shared_options_label = Label('共享设置')
         shared_options_label.setAlignment(Qt.AlignHCenter)
-        self.emd_decompose_radio_btn = RadioButton('Decompose')
+        self.emd_decompose_radio_btn = RadioButton('分解')
         self.emd_decompose_radio_btn.setChecked(self.emd_options_flag)
-        imf_num_label = Label('Number of IMF')
+        imf_num_label = Label('IMF数量')
         self.emd_decompose_line_edit = OnlyNumLineEdit()
-        self.emd_decompose_line_edit.setToolTip('Number of IMF, max to 9')
+        self.emd_decompose_line_edit.setToolTip('IMF数量，最大为9')
         self.emd_decompose_line_edit.setText(str(self.imfs_res_num - 1))
 
-        self.emd_reconstruct_radio_btn = RadioButton('Reconstruct')
+        self.emd_reconstruct_radio_btn = RadioButton('重构')
         self.emd_reconstruct_radio_btn.setChecked(not self.emd_options_flag)
-        reconstruct_imf_number_label = Label('IMF(s) to reconstruct')
+        reconstruct_imf_number_label = Label('重构的IMF')
         self.emd_reconstruct_line_edit = LineEdit()
-        self.emd_reconstruct_line_edit.setToolTip(
-            'Numbers of IMF to reconstruct, should be separated by symbol(s) like comma and space')
+        self.emd_reconstruct_line_edit.setToolTip('重构的IMF号，应用逗号或空格分隔')
         self.emd_reconstruct_line_edit.setText(str(self.reconstruct_nums))
 
         if not hasattr(self, 'imfs_res'):
@@ -1933,49 +1702,46 @@ class MainWindow(QMainWindow):
             reconstruct_imf_number_label.setEnabled(False)
             self.emd_reconstruct_line_edit.setEnabled(False)
 
-        eemd_options_label = Label('EEMD Options')
+        eemd_options_label = Label('EEMD设置')
         eemd_options_label.setAlignment(Qt.AlignHCenter)
-        eemd_trials_label = Label('Trial Points')
+        eemd_trials_label = Label('试验点')
         self.eemd_trials_line_edit = OnlyNumLineEdit()
         self.eemd_trials_line_edit.setText(str(self.eemd_trials))
-        self.eemd_trials_line_edit.setToolTip('Number of trials or EMD performance with added noise')
-        eemd_noise_width_label = Label('Noise Width')
+        self.eemd_trials_line_edit.setToolTip('添加噪声的试验点或施加EMD点的数量')
+        eemd_noise_width_label = Label('噪声宽度')
         self.eemd_noise_width_line_edit = NumPointLineEdit()
         self.eemd_noise_width_line_edit.setText(str(self.eemd_noise_width))
-        self.eemd_noise_width_line_edit.setToolTip(
-            'Standard deviation of Gaussian noise. It’s relative to absolute amplitude of the signal')
+        self.eemd_noise_width_line_edit.setToolTip('高斯噪声的标准差，与信号的幅值有关')
 
-        ceemdan_options_label = Label('CEEMDAN Options')
+        ceemdan_options_label = Label('CEEMDAN设置')
         ceemdan_options_label.setAlignment(Qt.AlignHCenter)
-        ceemdan_trials_label = Label('Trial Points')
+        ceemdan_trials_label = Label('试验点')
         self.ceemdan_trials_line_edit = OnlyNumLineEdit()
         self.ceemdan_trials_line_edit.setText(str(self.ceemdan_trials))
-        self.ceemdan_trials_line_edit.setToolTip('Number of trials or EMD performance with added noise')
+        self.ceemdan_trials_line_edit.setToolTip('添加噪声的试验点或施加EMD点的数量')
         ceemdan_epsilon_label = Label('Epsilon')
         self.ceemdan_epsilon_line_edit = NumPointLineEdit()
         self.ceemdan_epsilon_line_edit.setText(str(self.ceemdan_epsilon))
-        self.ceemdan_epsilon_line_edit.setToolTip('Scale for added noise which multiply std')
-        ceemdan_noise_scale_label = Label('Noise Scale')
+        self.ceemdan_epsilon_line_edit.setToolTip('添加噪声乘标准差后的大小')
+        ceemdan_noise_scale_label = Label('噪声大小')
         self.ceemdan_noise_scale_line_edit = NumPointLineEdit()
         self.ceemdan_noise_scale_line_edit.setText(str(self.ceemdan_noise_scale))
-        self.ceemdan_noise_scale_line_edit.setToolTip('Scale (amplitude) of the added noise')
-        ceemdan_noise_kind_label = Label('Noise Kind')
+        self.ceemdan_noise_scale_line_edit.setToolTip('添加噪声的振幅')
+        ceemdan_noise_kind_label = Label('噪声种类')
         self.ceemdan_noise_kind_combx = ComboBox()
         self.ceemdan_noise_kind_combx.addItems(['normal', 'uniform'])
         self.ceemdan_noise_kind_combx.setCurrentIndex(self.ceemdan_noise_kind_index)
-        ceemdan_range_thr_label = Label('Range Threshold')
+        ceemdan_range_thr_label = Label('振幅范围阈值')
         self.ceemdan_range_thr_line_edit = NumPointLineEdit()
         self.ceemdan_range_thr_line_edit.setText(str(self.ceemdan_range_thr))
-        self.ceemdan_range_thr_line_edit.setToolTip(
-            'Range threshold used as an IMF check. The value is in percentage compared to initial signal’s amplitude. '
-            'If absolute amplitude (max - min) is below the range_thr then the decomposition is finished')
-        ceemdan_total_power_thr_label = Label('Total Power Threshold')
+        self.ceemdan_range_thr_line_edit.setToolTip('用于IMF分解检查，其值等于与初始信号振幅之比的百分数，如果绝对振幅小于振幅范围阈值，'
+                                                    '则认为分解完成')
+        ceemdan_total_power_thr_label = Label('总功率阈值')
         self.ceemdan_total_power_thr_line_edit = NumPointLineEdit()
         self.ceemdan_total_power_thr_line_edit.setText(str(self.ceemdan_total_power_thr))
-        self.ceemdan_total_power_thr_line_edit.setToolTip(
-            'Signal’s power threshold. Finishes decomposition if sum(abs(r)) < thr')
+        self.ceemdan_total_power_thr_line_edit.setToolTip('用于IMF分解检查，如果信号总功率小于总功率阈值，则认为分解完成')
 
-        btn = PushButton('OK')
+        btn = PushButton('确定')
         btn.clicked.connect(self.updateEMDParams)
         btn.clicked.connect(dialog.close)
 
@@ -2090,30 +1856,31 @@ class MainWindow(QMainWindow):
         pw_list = []
         for i in range(len(inst_freqs)):
             if i == 0:
-                pw_list.append(MyPlotWidget('Instantaneous Frequency of IMF(s)', '', 'IMF1(Hz)'))
+                pw_list.append(MyPlotWidget('瞬时频率图', '', 'IMF1（Hz）'))
             elif i == len(inst_freqs) - 1:
-                pw_list.append(MyPlotWidget('', 'Time(s)', f'Residual'))
+                pw_list.append(MyPlotWidget('', '时间（s）', f'Residual'))
             else:
-                pw_list.append(MyPlotWidget('', '', f'IMF{i + 1}(Hz)'))
+                pw_list.append(MyPlotWidget('', '', f'IMF{i + 1}（Hz）'))
 
             pw_list[i].setXRange(self.sampling_times_from_num / self.sampling_rate,
                                  self.sampling_times_to_num / self.sampling_rate)
             pw_list[i].setXLink(pw_list[0])
-            pw_list[i].plot(x, inst_freqs[i], pen=QColor('blue'))
+            pw_list[i].draw(x, inst_freqs[i], pen=QColor('blue'))
             pw_list[i].setFixedHeight(150)
             vbox.addWidget(pw_list[i])
         wgt.setLayout(vbox)
         scroll_area.setWidget(wgt)
-        self.tab_widget.addTab(scroll_area, f'EMD - Instantaneous Frequency:\n'
-                                            f'Channel Number={self.channel_number}')
+        self.tab_widget.addTab(scroll_area, f'{self.emd_method} - 瞬时频率:\t'
+                                            f'通道号={self.channel_number}')
 
     # """------------------------------------------------------------------------------------------------------------"""
-    """Filter-IIR Filter-Butterworth调用函数"""
+    """滤波-IIR滤波器-Butterworth调用函数"""
 
     def iirCalculateFilterParams(self):
         """计算滤波器阶数和自然频率"""
 
-        if not hasattr(self, 'filter') or self.filter.name != self.iir_menu.sender().text():  # 如果没有操作过或两次选择的滤波器不同
+        if not hasattr(self,
+                       'filter') or self.filter.filter_name != self.iir_menu.sender().text():  # 如果没有操作过或两次选择的滤波器不同
             self.filter = FilterI(self.iir_menu.sender().text())
 
             dialog_layout = QVBoxLayout()
@@ -2132,7 +1899,7 @@ class MainWindow(QMainWindow):
     def iirDesignBesselFilter(self):
         """设计Bessel/Thomson滤波器"""
 
-        if not hasattr(self, 'filter') or self.filter.name != 'Bessel/Thomson':
+        if not hasattr(self, 'filter') or self.filter.filter_name != 'Bessel/Thomson':
             self.filter = FilterI('Bessel/Thomson')
 
             self.filter.btn.clicked.connect(self.plotIIRFilter)
@@ -2143,7 +1910,7 @@ class MainWindow(QMainWindow):
     def iirDesignCombFilter(self):
         """设计comb类滤波器"""
 
-        if not hasattr(self, 'filter') or self.filter.name != self.iir_menu.sender().text():
+        if not hasattr(self, 'filter') or self.filter.filter_name != self.iir_menu.sender().text():
             self.filter = FilterII(self.iir_menu.sender().text())
 
             self.filter.btn.clicked.connect(self.plotIIRFilter)
@@ -2154,44 +1921,40 @@ class MainWindow(QMainWindow):
     def plotIIRFilter(self):
         """绘制iir滤波器图"""
 
-        data = self.data[self.channel_number]
+        data = self.data[self.channel_number - 1]
         data = filtfilt(self.filter.b, self.filter.a, data)  # 滤波
 
-        combine_widget = self.initTwoPlotWidgets(data, 'IIRFilter')
+        combine_widget = self.initTwoPlotWidgets(data, 'IIR滤波器')
 
         if hasattr(self.filter, 'method'):
-            self.tab_widget.addTab(combine_widget,
-                                   f'Filtered Image - Filter={self.filter.name}\n'
-                                   f'Method={self.filter.method}\t'
-                                   f'Channel Number={self.channel_number}')
+            self.tab_widget.addTab(combine_widget, f'IIR滤波器 - 滤波器={self.filter.filter_name}\t'
+                                                   f'滤波器类型={self.filter.method}\t'
+                                                   f'通道号={self.channel_number}')
         else:
-            self.tab_widget.addTab(combine_widget,
-                                   f'Filtered Image - Filter={self.filter.name}\n'
-                                   f'Channel Number={self.channel_number}')
+            self.tab_widget.addTab(combine_widget, f'IIR滤波器 - 滤波器={self.filter.filter_name}\t'
+                                                   f'通道号={self.channel_number}')
 
         self.ifUpdateData(self.if_update_data, data)
 
     # """------------------------------------------------------------------------------------------------------------"""
-    """Wavelet-Discrete Wavelet Transform菜单调用函数"""
+    """小波-离散小波变换菜单调用函数"""
 
     def waveletDWTDialog(self):
         """设置选择的小波、分解层数、填充模式"""
 
         dialog = QDialog()
-        dialog.setWindowTitle('Discrete Wavelet Transform')
+        dialog.setWindowTitle('离散小波变换')
 
-        self.wavelet_dwt_decompose_radiobtn = RadioButton('Decompose')
+        self.wavelet_dwt_decompose_radiobtn = RadioButton('分解')
         self.wavelet_dwt_decompose_radiobtn.setChecked(self.wavelet_dwt_flag)
 
-        wavelet_dwt_reconstruct_radiobtn = RadioButton('Reconstruct')
+        wavelet_dwt_reconstruct_radiobtn = RadioButton('重构')
         wavelet_dwt_reconstruct_radiobtn.setChecked(not self.wavelet_dwt_flag)
 
-        wavelet_dwt_reconstruct_label = Label('Coefficient(s) to reconstruct')
+        wavelet_dwt_reconstruct_label = Label('重构系数')
         self.wavelet_dwt_reconstruct_line_edit = LineEdit()
         self.wavelet_dwt_reconstruct_line_edit.setFixedWidth(500)
-        self.wavelet_dwt_reconstruct_line_edit.setToolTip(
-            'Choose cAn and cDn to reconstruct\ncAn: approximation coefficients\ncDn-cD1: detail coefficients'
-            'just delete the unwanted cDn(s) and leave the format as they were')
+        self.wavelet_dwt_reconstruct_line_edit.setToolTip('选择cAn和cDn系数进行重构，cAn为近似系数，cDn-cD1为细节系数')
         self.wavelet_dwt_reconstruct_line_edit.setText(str(self.wavelet_dwt_reconstruct))
 
         if not hasattr(self, 'wavelet_dwt_coeffs'):
@@ -2199,38 +1962,36 @@ class MainWindow(QMainWindow):
             wavelet_dwt_reconstruct_label.setEnabled(False)
             self.wavelet_dwt_reconstruct_line_edit.setEnabled(False)
 
-        wavelet_dwt_label = Label('Wavelet To Use:')
+        wavelet_dwt_label = Label('选择小波：')
 
-        wavelet_dwt_family_label = Label('Wavelet Family')
+        wavelet_dwt_family_label = Label('小波族')
         self.wavelet_dwt_family_combx = ComboBox()
         self.wavelet_dwt_family_combx.addItems(pywt.families(short=False))
         self.wavelet_dwt_family_combx.setCurrentIndex(self.wavelet_dwt_family_index)
         self.wavelet_dwt_family_combx.currentIndexChanged[int].connect(self.waveletDWTChangeNameComboBox)
 
-        wavelet_dwt_name_label = Label('Name')
+        wavelet_dwt_name_label = Label('小波名称')
         self.wavelet_dwt_name_combx = ComboBox()
         self.wavelet_dwt_name_combx.setFixedWidth(75)
         self.wavelet_dwt_name_combx.addItems(pywt.wavelist(pywt.families()[self.wavelet_dwt_family_index]))
         self.wavelet_dwt_name_combx.setCurrentIndex(self.wavelet_dwt_name_index)
 
-        wavelet_dwt_decompose_level_label = Label('Decompose Level')
+        wavelet_dwt_decompose_level_label = Label('分解层数')
         self.wavelet_dwt_decompose_level_line_edit = OnlyNumLineEdit()
-        self.wavelet_dwt_decompose_level_line_edit.setToolTip(
-            'Decomposition level, which must be an integer bigger than 0')
+        self.wavelet_dwt_decompose_level_line_edit.setToolTip('分解层数')
         self.wavelet_dwt_decompose_level_line_edit.setText(str(self.wavelet_dwt_decompose_level))
 
-        self.wavelet_dwt_decompose_level_checkbx = CheckBox('Use Calculated Level')
-        self.wavelet_dwt_decompose_level_checkbx.setToolTip(
-            'If using calculated level, which is determined by data length and chosen wavelet')
+        self.wavelet_dwt_decompose_level_checkbx = CheckBox('使用计算的分解层数')
+        self.wavelet_dwt_decompose_level_checkbx.setToolTip('使用根据数据长度和选择的小波计算得到的分解层数')
         self.wavelet_dwt_decompose_level_checkbx.setChecked(self.wavelet_dwt_decompose_level_calculated)
 
-        wavelet_dwt_padding_mode_label = Label('Padding Mode')
+        wavelet_dwt_padding_mode_label = Label('填充模式')
         self.wavelet_dwt_padding_mode_combx = ComboBox()
-        self.wavelet_dwt_padding_mode_combx.setToolTip('Signal extension mode')
+        self.wavelet_dwt_padding_mode_combx.setToolTip('数据延长模式')
         self.wavelet_dwt_padding_mode_combx.addItems(pywt.Modes.modes)
         self.wavelet_dwt_padding_mode_combx.setCurrentIndex(self.wavelet_dwt_padding_mode_index)
 
-        btn = PushButton('OK')
+        btn = PushButton('确定')
         btn.clicked.connect(self.updateWaveletDWTParams)
         btn.clicked.connect(self.runWaveletDWT)
         btn.clicked.connect(dialog.close)
@@ -2294,9 +2055,7 @@ class MainWindow(QMainWindow):
     def runWaveletDWT(self):
         """分解或重构"""
 
-        data = self.data[self.channel_number]
-        if self.data_unit_index == 1:
-            data *= 10e6
+        data = self.data[self.channel_number - 1]
 
         if self.wavelet_dwt_decompose_level_calculated:
             self.wavelet_dwt_decompose_level = pywt.dwt_max_level(self.current_sampling_times,
@@ -2307,6 +2066,7 @@ class MainWindow(QMainWindow):
                 self.wavelet_dwt_coeffs = pywt.wavedec(data, wavelet=self.wavelet_dwt_name_combx.currentText(),
                                                        mode=self.wavelet_dwt_padding_mode_combx.currentText(),
                                                        level=self.wavelet_dwt_decompose_level)  # 求分解系数
+
             except Exception as err:
                 printError(err)
 
@@ -2314,31 +2074,29 @@ class MainWindow(QMainWindow):
             self.wavelet_dwt_reconstruct.append(f'cA{self.wavelet_dwt_decompose_level}')
             for i in range(len(self.wavelet_dwt_coeffs) - 1, 0, -1):
                 self.wavelet_dwt_reconstruct.append(f'cD{i}')
+            self.wavelet_dwt_former_reconstruct = self.wavelet_dwt_reconstruct
 
         else:
-            rec_coeffs = self.wavelet_dwt_reconstruct.split("'")
-            rec_Dcoeffs = []
-            for i in rec_coeffs:
-                if re.match('cA\d+|cD\d+', i) is None:
-                    continue
-                rec_Dcoeffs.append(re.match('cA\d+|cD\d+', i).group())
+            rec_coeffs_split = str(self.wavelet_dwt_reconstruct).split("'")
+            rec_coeffs = []
+            for i in rec_coeffs_split:
+                coeff = re.match('^\w{2}\d+$', i)
+                if coeff is not None:
+                    rec_coeffs.append(coeff.group())
+            self.wavelet_dwt_reconstruct = rec_coeffs  # 更新规范的重构系数显示
 
-            rec_Dcoeffs_number = []
-            for i in rec_Dcoeffs[1:]:
-                rec_Dcoeffs_number.append(int(re.match('\d+', i[2:]).group()))
-
-            for i in rec_Dcoeffs_number:
-                if i not in range(len(self.wavelet_dwt_coeffs) - 1):
-                    self.wavelet_dwt_coeffs[-i] = np.zeros_like(self.wavelet_dwt_coeffs[-i])
+            for i in self.wavelet_dwt_former_reconstruct:
+                if i not in rec_coeffs:  # 删除的系数置0
+                    if i == f'cA{self.wavelet_dwt_decompose_level}':
+                        self.wavelet_dwt_coeffs[0] = np.zeros_like(self.wavelet_dwt_coeffs[0])
+                    else:
+                        number = int(re.match('^cD(\d+)$', i).group(1))
+                        self.wavelet_dwt_coeffs[-number] = np.zeros_like(self.wavelet_dwt_coeffs[-number])
 
         self.plotWaveletDWT(self.wavelet_dwt_coeffs)
 
     def plotWaveletDWT(self, coeffs):
         """绘图"""
-
-        if self.data_unit_index == 1:
-            for i in coeffs:
-                i /= 10e6
 
         if self.wavelet_dwt_flag:
             wgt = QWidget()
@@ -2348,19 +2106,16 @@ class MainWindow(QMainWindow):
             hbox = QHBoxLayout()
             scroll_area = QScrollArea()
 
-            pw_time_list = []
-            pw_fre_list = []
+            pw_time_list, pw_fre_list = [], []
             for i in range(len(coeffs)):
                 if i == 0:
-                    pw_time = MyPlotWidget('DWT Decompose - Time Domain', '',
-                                           f'cA{self.wavelet_dwt_decompose_level}(rad)')
-                    pw_fre = MyPlotWidget('DWT Decompose - Frequency Domain', '',
-                                          f'cA{self.wavelet_dwt_decompose_level}')
+                    pw_time = MyPlotWidget('离散小波变换分解 - 时域', '', f'cA{self.wavelet_dwt_decompose_level}（rad）')
+                    pw_fre = MyPlotWidget('离散小波变换分解 - 频域', '', f'cA{self.wavelet_dwt_decompose_level}')
                 elif i == len(coeffs) - 1:
-                    pw_time = MyPlotWidget('', 'Time(s)', f'cD1(rad)')
-                    pw_fre = MyPlotWidget('', 'Frequency(Hz)', f'cD1')
+                    pw_time = MyPlotWidget('', '时间（s）', f'cD1（rad）')
+                    pw_fre = MyPlotWidget('', '频率（Hz）', f'cD1')
                 else:
-                    pw_time = MyPlotWidget('', '', f'cD{len(coeffs) - i}(rad)')
+                    pw_time = MyPlotWidget('', '', f'cD{len(coeffs) - i}（rad）')
                     pw_fre = MyPlotWidget('', '', f'cD{len(coeffs) - i}')
 
                 x_time = np.linspace(self.sampling_times_from_num, self.sampling_times_from_num + len(coeffs[i]),
@@ -2368,7 +2123,7 @@ class MainWindow(QMainWindow):
                 pw_time.setXRange(self.sampling_times_from_num / self.sampling_rate,
                                   (self.sampling_times_from_num + len(coeffs[i])) / self.sampling_rate)
                 pw_time.setFixedHeight(150)
-                pw_time.plot(x_time, coeffs[i], pen=QColor('blue'))
+                pw_time.draw(x_time, coeffs[i], pen=QColor('blue'))
                 pw_time_list.append(pw_time)
                 pw_time_list[i].setXLink(pw_time_list[0])
 
@@ -2377,7 +2132,7 @@ class MainWindow(QMainWindow):
                 pw_fre.setXRange(0, self.sampling_rate / 2)
                 pw_fre.setFixedHeight(150)
                 y = fixDateLength(len(coeffs[i]))
-                pw_fre.plot(x_fre, data[:y // 2], pen=QColor('blue'))
+                pw_fre.draw(x_fre, data[:y // 2], pen=QColor('blue'))
                 pw_fre_list.append(pw_fre)
                 pw_fre_list[i].setXLink(pw_fre_list[0])
 
@@ -2388,23 +2143,22 @@ class MainWindow(QMainWindow):
             hbox.addLayout(vbox2)
             wgt.setLayout(hbox)
             scroll_area.setWidget(wgt)
-            self.tab_widget.addTab(scroll_area,
-                                   f'DWT - Decompose: Level={self.wavelet_dwt_decompose_level}\n'
-                                   f'Wavelet={self.wavelet_dwt_name_combx.currentText()}\t'
-                                   f'Channel Number={self.channel_number}')
+            self.tab_widget.addTab(scroll_area, f'离散小波变换 - 分解: 分解层数={self.wavelet_dwt_decompose_level}\t'
+                                                f'小波={self.wavelet_dwt_name_combx.currentText()}\t'
+                                                f'通道号={self.channel_number}')
         else:
             try:
                 data = pywt.waverec(coeffs, wavelet=self.wavelet_dwt_name_combx.currentText(),
                                     mode=self.wavelet_dwt_padding_mode_combx.currentText())  # 重构信号
+
             except Exception as err:
                 printError(err)
 
-            combine_widget = self.initTwoPlotWidgets(data, 'DWT Reconstruct')
+            combine_widget = self.initTwoPlotWidgets(data, '离散小波变换重构')
 
-            self.tab_widget.addTab(combine_widget,
-                                   f'DWT - Reconstruct: Coefficient={self.wavelet_dwt_reconstruct}\n'
-                                   f'Wavelet={self.wavelet_dwt_name_combx.currentText()}\t'
-                                   f'Channel Number={self.channel_number}')
+            self.tab_widget.addTab(combine_widget, f'离散小波变换 -重构: 系数={self.wavelet_dwt_reconstruct}\t'
+                                                   f'小波={self.wavelet_dwt_name_combx.currentText()}\t'
+                                                   f'通道号={self.channel_number}')
 
             self.ifUpdateData(self.if_update_data, data)
 
@@ -2412,25 +2166,25 @@ class MainWindow(QMainWindow):
         """小波去噪"""
 
         dialog = QDialog()
-        dialog.setWindowTitle('Wavelet Denoise')
+        dialog.setWindowTitle('小波去噪')
 
-        wavelet_threshold_label = Label('Threshold')
+        wavelet_threshold_label = Label('阈值')
         self.wavelet_threshold_line_edit = NumPointLineEdit()
-        self.wavelet_threshold_line_edit.setToolTip('Thresholding value')
+        self.wavelet_threshold_line_edit.setToolTip('去噪阈值')
         self.wavelet_threshold_line_edit.setText(str(self.wavelet_threshold))
 
-        wavelet_threshold_sub_label = Label('Substitute value')
+        wavelet_threshold_sub_label = Label('替换值')
         self.wavelet_threshold_sub_line_edit = NumPointLineEdit()
-        self.wavelet_threshold_sub_line_edit.setToolTip('Substitute value')
+        self.wavelet_threshold_sub_line_edit.setToolTip('数据中筛除的值替换为该值')
         self.wavelet_threshold_sub_line_edit.setText(str(self.wavelet_threshold_sub))
 
-        wavelet_threshold_mode_label = Label('Threshold Type')
+        wavelet_threshold_mode_label = Label('阈值类型')
         self.wavelet_threshold_mode_combx = ComboBox()
-        self.wavelet_threshold_mode_combx.setToolTip('Decides the type of thresholding to be applied on input data')
+        self.wavelet_threshold_mode_combx.setToolTip('设置阈值类型')
         self.wavelet_threshold_mode_combx.addItems(self.wavelet_threshold_modes)
         self.wavelet_threshold_mode_combx.setCurrentIndex(self.wavelet_threshold_mode_index)
 
-        btn = PushButton('OK')
+        btn = PushButton('确定')
         btn.clicked.connect(self.updateWaveletThresholdParams)
         btn.clicked.connect(self.plotWaveletThreshold)
         btn.clicked.connect(dialog.close)
@@ -2463,21 +2217,21 @@ class MainWindow(QMainWindow):
     def plotWaveletThreshold(self):
         """绘制滤波后的图像"""
 
-        data = self.data[self.channel_number]
+        data = self.data[self.channel_number - 1]
 
         try:
             data = pywt.threshold(data, value=self.wavelet_threshold,
                                   mode=self.wavelet_threshold_mode_combx.currentText(),
                                   substitute=self.wavelet_threshold_sub)  # 阈值滤波
+
         except Exception as err:
             printError(err)
 
-        combine_widget = self.initTwoPlotWidgets(data, 'Wavelet Threshold')
+        combine_widget = self.initTwoPlotWidgets(data, '小波去噪')
 
-        self.tab_widget.addTab(combine_widget,
-                               f'Wavelet Thresholded Image - Threshold={self.wavelet_threshold}\n'
-                               f'Threshold Type={self.wavelet_threshold_mode_combx.currentText()}\t'
-                               f'Channel Number={self.channel_number}')
+        self.tab_widget.addTab(combine_widget, f'小波去噪 - 阈值={self.wavelet_threshold}\t'
+                                               f'阈值类型={self.wavelet_threshold_mode_combx.currentText()}\t'
+                                               f'通道号={self.channel_number}')
 
         self.ifUpdateData(self.if_update_data, data)
 
@@ -2485,21 +2239,20 @@ class MainWindow(QMainWindow):
         """小波包分解"""
 
         dialog = QDialog()
-        dialog.setWindowTitle('Wavelet Packets')
+        dialog.setWindowTitle('小波包')
 
-        self.wavelet_packets_decompose_radiobtn = RadioButton('Decompose')
+        self.wavelet_packets_decompose_radiobtn = RadioButton('分解')
         self.wavelet_packets_decompose_radiobtn.setChecked(self.wavelet_packets_flag)
 
-        wavelet_packets_reconstruct_radiobtn = RadioButton('Reconstruct')
+        wavelet_packets_reconstruct_radiobtn = RadioButton('重构')
         wavelet_packets_reconstruct_radiobtn.setChecked(not self.wavelet_packets_flag)
 
-        wavelet_packets_reconstruct_label = Label('Subnode(s) to reconstruct')
+        wavelet_packets_reconstruct_label = Label('重构子节点')
         self.wavelet_packets_reconstruct_line_edit = LineEdit()
         self.wavelet_packets_reconstruct_line_edit.setFixedWidth(500)
-        self.wavelet_packets_reconstruct_line_edit.setToolTip(
-            'Choose a(s) and d(s) to reconstruct\na: approximation coefficients\nd: detail coefficients'
-            'just delete the unwanted subnode(s) and leave the format as they were\n'
-            'multiple connected a(s) and d(s) represent path of the subnode')
+        self.wavelet_packets_reconstruct_line_edit.setToolTip('选择重构的子节点，a为近似节点路径分支，d为细节节点路径分支，'
+                                                              '多个a或d相连代表了子节点路径')
+
         self.wavelet_packets_reconstruct_line_edit.setText(str(self.wavelet_packets_reconstruct))
 
         if not hasattr(self, 'wavelet_packets_subnodes'):
@@ -2507,43 +2260,41 @@ class MainWindow(QMainWindow):
             wavelet_packets_reconstruct_label.setEnabled(False)
             self.wavelet_packets_reconstruct_line_edit.setEnabled(False)
 
-        wavelet_packets_label = Label('Wavelet To Use:')
+        wavelet_packets_label = Label('选择小波：')
 
-        wavelet_packets_family_label = Label('Wavelet Family')
+        wavelet_packets_family_label = Label('小波族')
         self.wavelet_packets_family_combx = ComboBox()
         self.wavelet_packets_family_combx.addItems(pywt.families(short=False))
         self.wavelet_packets_family_combx.setCurrentIndex(self.wavelet_packets_family_index)
         self.wavelet_packets_family_combx.currentIndexChanged[int].connect(self.waveletPacketsChangeNameComboBox)
 
-        wavelet_packets_name_label = Label('Name')
+        wavelet_packets_name_label = Label('小波名称')
         self.wavelet_packets_name_combx = ComboBox()
         self.wavelet_packets_name_combx.setFixedWidth(75)
         self.wavelet_packets_name_combx.addItems(pywt.wavelist(pywt.families()[self.wavelet_packets_family_index]))
         self.wavelet_packets_name_combx.setCurrentIndex(self.wavelet_packets_name_index)
         self.wavelet_packets_name_combx.currentIndexChanged.connect(self.waveletPacketsCalculateDecomposeMaxLevel)
 
-        wavelet_packets_decompose_level_label = Label('Decompose Level')
+        wavelet_packets_decompose_level_label = Label('分解层数')
         self.wavelet_packets_decompose_level_line_edit = OnlyNumLineEdit()
-        self.wavelet_packets_decompose_level_line_edit.setToolTip(
-            'Decomposition level, which must be an integer bigger than 0')
+        self.wavelet_packets_decompose_level_line_edit.setToolTip('分解层数')
         self.wavelet_packets_decompose_level_line_edit.setText(str(self.wavelet_packets_decompose_level))
 
-        wavelet_packets_decompose_max_level_label = Label('Maximum Decompose Level')
+        wavelet_packets_decompose_max_level_label = Label('最大分解层数')
         self.wavelet_packets_decompose_max_level_line_edit = OnlyNumLineEdit()
         self.wavelet_packets_decompose_max_level_line_edit.setFocusPolicy(Qt.NoFocus)
-        self.wavelet_packets_decompose_max_level_line_edit.setToolTip(
-            'Maximum level data can be decomposed, which is determined according to the data length and chosen wavelet')
+        self.wavelet_packets_decompose_max_level_line_edit.setToolTip('数据的最大分解层数，与数据长度和选择的小波有关')
         self.wavelet_packets_decompose_max_level = pywt.dwt_max_level(self.data.shape[1],
                                                                       self.wavelet_packets_name_combx.currentText())
         self.wavelet_packets_decompose_max_level_line_edit.setText(str(self.wavelet_packets_decompose_max_level))
 
-        wavelet_packets_padding_mode_label = Label('Padding Mode')
+        wavelet_packets_padding_mode_label = Label('填充模式')
         self.wavelet_packets_padding_mode_combx = ComboBox()
-        self.wavelet_packets_padding_mode_combx.setToolTip('Signal extension mode')
+        self.wavelet_packets_padding_mode_combx.setToolTip('信号延长模式')
         self.wavelet_packets_padding_mode_combx.addItems(pywt.Modes.modes)
         self.wavelet_packets_padding_mode_combx.setCurrentIndex(self.wavelet_packets_padding_mode_index)
 
-        btn = PushButton('OK')
+        btn = PushButton('确定')
         btn.clicked.connect(self.updateWaveletPacketsParams)
         btn.clicked.connect(self.runWaveletPackets)
         btn.clicked.connect(dialog.close)
@@ -2615,9 +2366,7 @@ class MainWindow(QMainWindow):
     def runWaveletPackets(self):
         """处理数据，绘图"""
 
-        data = self.data[self.channel_number]
-        if self.data_unit_index == 1:
-            data *= 10e6
+        data = self.data[self.channel_number - 1]
 
         try:
             if self.wavelet_packets_flag:
@@ -2630,12 +2379,13 @@ class MainWindow(QMainWindow):
 
             else:
                 total_paths = [i.path for i in self.wavelet_packets_subnodes]
-                self.wavelet_packets_reconstruct = self.wavelet_packets_reconstruct.split("','")
+                self.wavelet_packets_reconstruct = str(self.wavelet_packets_reconstruct).split("','")
                 self.wavelet_packets_reconstruct = re.findall('\w+', self.wavelet_packets_reconstruct[0])
 
                 for i in total_paths:
                     if i not in self.wavelet_packets_reconstruct:
                         del self.wavelet_packets_wp[i]
+
         except Exception as err:
             printError(err)
 
@@ -2643,10 +2393,6 @@ class MainWindow(QMainWindow):
 
     def plotWaveletPackets(self, subnodes):
         """绘图"""
-
-        if self.data_unit_index == 1:
-            for i in subnodes:
-                i.data /= 10e6
 
         if self.wavelet_packets_flag:
             wgt = QWidget()
@@ -2656,19 +2402,16 @@ class MainWindow(QMainWindow):
             hbox = QHBoxLayout()
             scroll_area = QScrollArea()
 
-            pw_time_list = []
-            pw_fre_list = []
+            pw_time_list, pw_fre_list = [], []
             for i in range(len(subnodes)):
                 if i == 0:
-                    pw_time = MyPlotWidget('Wavelet Packets Decompose - Time Domain', '',
-                                           f'{self.wavelet_packets_subnodes[i].path}(rad)')
-                    pw_fre = MyPlotWidget('Wavelet Packets Decompose - Frequency Domain', '',
-                                          f'{self.wavelet_packets_subnodes[i].path}')
+                    pw_time = MyPlotWidget('小波包分解 - 时域', '', f'{self.wavelet_packets_subnodes[i].path}（rad）')
+                    pw_fre = MyPlotWidget('小波包分解 - 频域', '', f'{self.wavelet_packets_subnodes[i].path}')
                 elif i == len(subnodes) - 1:
-                    pw_time = MyPlotWidget('', 'Time(s)', f'{self.wavelet_packets_subnodes[i].path}(rad)')
-                    pw_fre = MyPlotWidget('', 'Frequency(Hz)', f'{self.wavelet_packets_subnodes[i].path}')
+                    pw_time = MyPlotWidget('', '时间（s）', f'{self.wavelet_packets_subnodes[i].path}（rad）')
+                    pw_fre = MyPlotWidget('', '频率（Hz）', f'{self.wavelet_packets_subnodes[i].path}')
                 else:
-                    pw_time = MyPlotWidget('', '', f'{self.wavelet_packets_subnodes[i].path}(rad)')
+                    pw_time = MyPlotWidget('', '', f'{self.wavelet_packets_subnodes[i].path}（rad）')
                     pw_fre = MyPlotWidget('', '', f'{self.wavelet_packets_subnodes[i].path}')
 
                 x_time = np.linspace(self.sampling_times_from_num, self.sampling_times_from_num + len(subnodes[i].data),
@@ -2676,7 +2419,7 @@ class MainWindow(QMainWindow):
                 pw_time.setXRange(self.sampling_times_from_num / self.sampling_rate,
                                   (self.sampling_times_from_num + len(subnodes[i].data)) / self.sampling_rate)
                 pw_time.setFixedHeight(150)
-                pw_time.plot(x_time, subnodes[i].data, pen=QColor('blue'))
+                pw_time.draw(x_time, subnodes[i].data, pen=QColor('blue'))
                 pw_time_list.append(pw_time)
                 pw_time_list[i].setXLink(pw_time_list[0])
 
@@ -2685,7 +2428,7 @@ class MainWindow(QMainWindow):
                 pw_fre.setXRange(0, self.sampling_rate / 2)
                 pw_fre.setFixedHeight(150)
                 y = fixDateLength(len(subnodes[i].data))
-                pw_fre.plot(x_fre, data[:y // 2], pen=QColor('blue'))
+                pw_fre.draw(x_fre, data[:y // 2], pen=QColor('blue'))
                 pw_fre_list.append(pw_fre)
                 pw_fre_list[i].setXLink(pw_fre_list[0])
 
@@ -2696,22 +2439,21 @@ class MainWindow(QMainWindow):
             hbox.addLayout(vbox2)
             wgt.setLayout(hbox)
             scroll_area.setWidget(wgt)
-            self.tab_widget.addTab(scroll_area,
-                                   f'Wavelet Packets - Decompose: Level={self.wavelet_packets_decompose_level}\n'
-                                   f'Wavelet={self.wavelet_packets_name_combx.currentText()}\t'
-                                   f'Channel Number={self.channel_number}')
+            self.tab_widget.addTab(scroll_area, f'小波包 - 分解: 分解层数={self.wavelet_packets_decompose_level}\t'
+                                                f'小波={self.wavelet_packets_name_combx.currentText()}\t'
+                                                f'通道号={self.channel_number}')
         else:
             try:
                 data = self.wavelet_packets_wp.reconstruct()  # 重构信号
+
             except Exception as err:
                 printError(err)
 
-            combine_widget = self.initTwoPlotWidgets(data, 'Wavelet Packets Reconstruct')
+            combine_widget = self.initTwoPlotWidgets(data, '小波包重构')
 
-            self.tab_widget.addTab(combine_widget,
-                                   f'Wavelet Packets - Reconstruct: Subnodes={self.wavelet_packets_reconstruct}\n'
-                                   f'Wavelet={self.wavelet_packets_name_combx.currentText()}\t'
-                                   f'Channel Number={self.channel_number}')
+            self.tab_widget.addTab(combine_widget, f'小波包 -重构: 子节点={self.wavelet_packets_reconstruct}\t'
+                                                   f'小波={self.wavelet_packets_name_combx.currentText()}\t'
+                                                   f'通道号={self.channel_number}')
 
             self.ifUpdateData(self.if_update_data, data)
 
@@ -2719,7 +2461,7 @@ class MainWindow(QMainWindow):
 
 
 if __name__ == '__main__':
-    DAS_Visualizer = QApplication(sys.argv)
+    app = QApplication(sys.argv)
     main_window = MainWindow()
     main_window.show()
-    sys.exit(DAS_Visualizer.exec_())
+    sys.exit(app.exec_())

@@ -15,21 +15,20 @@ import ctypes
 import sys
 
 import pandas as pd
-import pyqtgraph as pg
 import pywt
 from PyEMD import EMD, EEMD, CEEMDAN
-from PyQt5.QtGui import QIcon, QColor, QTransform
-from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, QFileDialog, qApp, QMenu, QTabWidget, QTableWidget, \
+from PyQt5.QtGui import QTransform
+from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, qApp, QTabWidget, QTableWidget, \
     QAbstractItemView, QTableWidgetItem, QHeaderView, QTabBar, QWidget, QScrollArea, QScrollBar
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from scipy.signal import hilbert, filtfilt, spectrogram
 from scipy.signal.windows import *
 
-from filter import *
-from function import *
-from image import *
-from widget import *
+from en.filter_en import *
+from en.function_en import *
+from en.image import *
+from en.widget_en import *
 
 
 class MainWindow(QMainWindow):

@@ -26,10 +26,10 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from scipy.signal import hilbert, filtfilt, spectrogram, detrend
 from scipy.signal.windows import *
 
-from filter import *
-from function import *
-from image import *
-from widget import *
+from en.filter_en import *
+from en.function_en import *
+from en.image import *
+from en.widget_en import *
 
 
 class MainWindow(QMainWindow):
