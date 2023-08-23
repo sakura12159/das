@@ -548,7 +548,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """退出时的提示"""
 
-        reply = QMessageBox.question(self, 'Tip', '是否退出？', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        reply = QMessageBox.question(self, '提示', '是否退出？', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
         # 判断返回值，如果点击的是Yes按钮，我们就关闭组件和应用，否则就忽略关闭事件
         event.accept() if reply == QMessageBox.Yes else event.ignore()
