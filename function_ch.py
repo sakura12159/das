@@ -13,9 +13,9 @@ def picture2py(pic_name):
     """将图像文件转换为py文件"""
 
     write_data = []
-    for picture_name in os.listdir('../Image/'):
+    for picture_name in os.listdir('Image/'):
         filename = picture_name.replace('.', '_')
-        open_pic = open(os.path.join('../Image/', picture_name), 'rb')
+        open_pic = open(os.path.join('Image/', picture_name), 'rb')
         b64str = base64.b64encode(open_pic.read())
         open_pic.close()
         # 注意这边b64str一定要加上.decode()
