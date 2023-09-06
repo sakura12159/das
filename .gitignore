@@ -1,11 +1,12 @@
 
-/.git
-/.idea
-/__pycache__
-/Lib
-/Scripts
-/share
-/build
-/dist
+.git/
+.idea/
+__pycache__/
+Lib/
+Scripts/
+share/
+build/
+dist/
 
 *.spec
+test*.py
