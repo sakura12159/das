@@ -1,13 +1,14 @@
 """
-2023-9-6
-ver1.5
+2023-9-16
+ver1.5.1
 
-1.添加绘制热力图的功能
+1.修改数据读取代码
+2.修改数据转为音频文件代码
 """
 
 import ctypes
 import sys
-import wave
+import soundfile
 from itertools import cycle
 
 import pandas as pd
@@ -23,9 +24,9 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from scipy.signal import hilbert, filtfilt, spectrogram, detrend
 from scipy.signal.windows import *
 
+from image import *
 from filter_ch import *
 from function_ch import *
-from image import *
 from widget_ch import *
 
 
@@ -580,20 +581,8 @@ class MainWindow(QMainWindow):
         """创建当前数据的wav文件，储存在当前文件夹路径下"""
 
         if not self.hasWavFile:
-            data = np.array(self.data[self.channel_number])  # 不转array会在重复转换数据类型时发生数据类型错误
-
-            self.temp_wavfile = wave.open(os.path.join(self.file_path, 'temp.wav'), 'wb')  # 在放置数据的文件夹中创建一个临时文件
-            self.temp_wavfile.setnchannels(1)  # 设置通道数
-            self.temp_wavfile.setsampwidth(2)  # 设置采样宽
-            self.temp_wavfile.setframerate(self.sampling_rate)  # 设置采样
-            self.temp_wavfile.setnframes(self.current_sampling_times)  # 设置帧数
-            self.temp_wavfile.setcomptype('NONE', 'not compressed')  # 设置采样格式  无压缩
-
-            data /= np.max(np.abs(data))  # 归一化至[-1, 1]
-            data *= 32768  # 转16位整数必要
-            data = data.astype(np.int16).tobytes()  # 转16位整数类型后转比特
-            self.temp_wavfile.writeframes(data)
-            self.temp_wavfile.close()
+            data = np.array(self.data[self.channel_number - 1])  # 不转array会在重复转换数据类型时发生数据类型错误
+            soundfile.write(os.path.join(self.file_path, 'temp.wav'), data, self.sampling_rate)
             self.hasWavFile = True
 
     def createPlayer(self):
@@ -751,8 +740,9 @@ class MainWindow(QMainWindow):
     def importData(self):
         """导入（多个）数据文件后更新参数和绘图等"""
 
-        self.file_names = QFileDialog.getOpenFileNames(self, '导入', '', 'DAS data (*.dat)')[0]  # 打开多个.dat文件
-        if self.file_names != []:
+        file_names = QFileDialog.getOpenFileNames(self, '导入', '', 'DAS data (*.dat)')[0]  # 打开多个.dat文件
+        if file_names != []:
+            self.file_names = file_names
             self.file_path = os.path.dirname(self.file_names[0])
 
             self.readData()
@@ -764,21 +754,18 @@ class MainWindow(QMainWindow):
 
         time, data = [], []
         for file in self.file_names:
-            with open(os.path.join(self.file_path, file), 'rb') as f:
-                raw_data = np.fromfile(f, dtype='<f4')  # <低位在前高位在后（小端模式），f4：32位（单精度）浮点类型
-                sampling_rate = int(raw_data[6])  # 采样率
-                sampling_times = int(raw_data[7])  # 采样次数
-                channels_num = int(raw_data[9])  # 通道数
-                time.append(raw_data[:6])  # GPS时间
-                data.append(raw_data[10:].reshape((channels_num, sampling_times)).T)
-        data = np.concatenate(data).T  # （通道数，采样次数）
+            raw_data = np.fromfile(os.path.join(self.file_path, file), dtype='<f4')  # <低位在前高位在后（小端模式），f4：32位（单精度）浮点类型
+            self.sampling_rate = int(raw_data[6])  # 采样率
+            self.single_sampling_times = int(raw_data[7])  # 采样次数
+            self.current_channels = int(raw_data[9])  # 通道数
+            time.append(raw_data[:6])  # GPS时间
+            data.append(raw_data[10:].reshape(self.current_channels, self.single_sampling_times).T)
 
         # 初始化数据相关参数
-        self.sampling_rate = sampling_rate
-        self.sampling_times = sampling_times * len(self.file_names)
-        self.current_channels = channels_num
-        self.data, self.origin_data = data, data
         self.time = time
+        self.data = np.concatenate(data).T  # （通道数，采样次数）
+        self.sampling_times = self.single_sampling_times * len(self.file_names)
+        self.origin_data = self.data
 
     # """------------------------------------------------------------------------------------------------------------"""
     """文件-导出调用函数"""
@@ -1197,7 +1184,7 @@ class MainWindow(QMainWindow):
             plot_widget.clear()
 
         plot_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
-                         self.sampling_times_to_num / self.sampling_rate)
+                              self.sampling_times_to_num / self.sampling_rate)
         plot_widget.setYRange(1, self.current_channels)
 
         tr = QTransform()
@@ -1288,7 +1275,6 @@ class MainWindow(QMainWindow):
         plot_widget = MyPlotWidget('功率谱密度图', '频率（Hz）', '功率/频率（dB/Hz）', grid=True)
         x = np.arange(0, self.sampling_rate / 2, self.sampling_rate / self.current_sampling_times)
         plot_widget.setXRange(0, self.sampling_rate / 2)
-        plot_widget.setLogMode(x=True)
         plot_widget.draw(x, data, pen=QColor('blue'))
         self.tab_widget.addTab(plot_widget, f'功率谱密度图 - 窗口类型={self.window_text}\t'
                                             f'通道号={self.channel_number}')
@@ -1299,7 +1285,7 @@ class MainWindow(QMainWindow):
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
         self.tab_widget.addTab(figure_widget, f'功率谱密度色块图 - 窗口类型={self.window_text}\t'
-                                       f'通道号={self.channel_number}')
+                                              f'通道号={self.channel_number}')
         data = self.data[self.channel_number - 1]
         ax = plt.axes()
         ax.tick_params(axis='both', which='both', direction='in')
@@ -1320,7 +1306,7 @@ class MainWindow(QMainWindow):
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
         self.tab_widget.addTab(figure_widget, f'三维功率谱密度图 - 窗口类型={self.window_text}\t'
-                                       f'通道号={self.channel_number}')
+                                              f'通道号={self.channel_number}')
 
         ax = figure.add_subplot(projection='3d')
         ax.tick_params(axis='both', which='both', direction='in')
@@ -1358,7 +1344,7 @@ class MainWindow(QMainWindow):
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
         self.tab_widget.addTab(figure_widget, f'幅度谱色块图 - 窗口类型={self.window_text}\t'
-                                       f'通道号={self.channel_number}')
+                                              f'通道号={self.channel_number}')
 
         data = self.data[self.channel_number - 1]
         ax = plt.axes()
@@ -1380,7 +1366,7 @@ class MainWindow(QMainWindow):
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
         self.tab_widget.addTab(figure_widget, f'三维幅度谱 - 窗口类型={self.window_text}\t'
-                                       f'通道号={self.channel_number}')
+                                              f'通道号={self.channel_number}')
 
         ax = figure.add_subplot(projection='3d')
         ax.tick_params(axis='both', which='both', direction='in')
@@ -1415,7 +1401,7 @@ class MainWindow(QMainWindow):
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
         self.tab_widget.addTab(figure_widget, f'角度谱色块图 - 窗口类型={self.window_text}\t'
-                                       f'通道号={self.channel_number}')
+                                              f'通道号={self.channel_number}')
 
         data = self.data[self.channel_number - 1]
         ax = plt.axes()
@@ -1437,7 +1423,7 @@ class MainWindow(QMainWindow):
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
         self.tab_widget.addTab(figure_widget, f'三维角度谱 - 窗口类型={self.window_text}\t'
-                                       f'通道号={self.channel_number}')
+                                              f'通道号={self.channel_number}')
 
         ax = figure.add_subplot(projection='3d')
         ax.tick_params(axis='both', which='both', direction='in')
