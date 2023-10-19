@@ -759,11 +759,11 @@ class MainWindow(QMainWindow):
             self.single_sampling_times = int(raw_data[7])  # 采样次数
             self.current_channels = int(raw_data[9])  # 通道数
             time.append(raw_data[:6])  # GPS时间
-            data.append(raw_data[10:].reshape(self.current_channels, self.single_sampling_times).T)
+            data.append(raw_data[10:].reshape(self.current_channels, self.single_sampling_times))
 
         # 初始化数据相关参数
         self.time = time
-        self.data = np.concatenate(data).T  # （通道数，采样次数）
+        self.data = np.concatenate(data, axis=1)  # （通道数，采样次数）
         self.sampling_times = self.single_sampling_times * len(self.file_names)
         self.origin_data = self.data
 

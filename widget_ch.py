@@ -237,9 +237,15 @@ class MyPlotWidget(pg.PlotWidget):
     def searchPointIndex(self, xpos, ypos):
         """寻找x坐标附近的点，返回该点的索引"""
 
-        distance = []
-        for i in range(self.data.shape[1]):
-            distance.append(np.sqrt((xpos - self.data[0][i]) ** 2 + (ypos - self.data[1][i]) ** 2))
-        index = distance.index(min(distance))
+        # distances = []
+        # for i in range(self.data.shape[1]):
+        #     distances.append(np.sqrt((xpos - self.data[0][i]) ** 2 + (ypos - self.data[1][i]) ** 2))
+        # index = distances.index(min(distances))
+        #
+        # return index
 
-        return index
+        distances = {}
+        for i in range(self.data.shape[1]):
+            distances[np.sqrt((xpos - self.data[0][i]) ** 2 + (ypos - self.data[1][i]) ** 2)] = i
+
+        return distances[sorted(distances)[0]]
