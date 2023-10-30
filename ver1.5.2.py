@@ -3,6 +3,7 @@
 ver1.5.2
 
 1.修改搜索距离鼠标位置最近数据点的算法
+2.修复滤波器更新数据的bug
 """
 
 import ctypes
@@ -134,10 +135,6 @@ class MainWindow(QMainWindow):
 
         # 绘图
         self.plot_menu = createMenu('绘图', self.menu_bar, enabled=False)
-
-        # 绘图-显示数据标签
-        self.if_check_mouse_action = createAction('显示数据标签（是）', self.plot_menu, '可通过移动鼠标位置显示数据',
-                                                  self.updateCheckMouse)
 
         # 绘图-二值图
         self.plot_binary_image_action = createAction('二值图', self.plot_menu, '通过设置或计算阈值来绘制二值图',
@@ -666,7 +663,7 @@ class MainWindow(QMainWindow):
 
         self.readData()
         self.initLocalParams()
-        self.update()
+        self.updateAll()
 
     def changeChannelNumber(self):
         """更改通道号，默认为1"""
@@ -683,6 +680,7 @@ class MainWindow(QMainWindow):
         self.operation_menu.setEnabled(True)
         self.plot_menu.setEnabled(True)
         self.filter_menu.setEnabled(True)
+        self.update_data_action.setText('更新数据（否）')
 
     def updateFile(self):
         """更新文件列表显示"""
@@ -728,7 +726,7 @@ class MainWindow(QMainWindow):
         self.plotSingleChannelTime()
         self.plotAmplitudeFrequency()
 
-    def update(self):
+    def updateAll(self):
         """总更新函数"""
 
         self.updateMenuBar()
@@ -750,7 +748,7 @@ class MainWindow(QMainWindow):
 
             self.readData()
             self.initLocalParams()
-            self.update()
+            self.updateAll()
 
     def readData(self):
         """读取数据，更新参数"""
@@ -1525,7 +1523,7 @@ class MainWindow(QMainWindow):
         """判断是否在滤波之后更新数据"""
 
         if flag:
-            self.origin_data[self.channel_number] = data
+            self.origin_data[self.channel_number - 1] = data
             self.data = self.origin_data
             self.updateImages()
 
