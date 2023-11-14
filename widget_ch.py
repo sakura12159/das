@@ -189,7 +189,7 @@ class MyPlotWidget(pg.PlotWidget):
         if self.check_mouse:
             self.plot_data_item = self.plot_item.plot(*args, **kwargs)
             self.updateAxesRange()
-            self.plot_item.scene().sigMouseMoved.connect(self.mouseMoved)  # 绘图之后绑定槽函数，否则会导致scene快速移动
+            # self.plot_item.scene().sigMouseMoved.connect(self.mouseMoved)  # 绘图之后绑定槽函数，否则会导致scene快速移动
         else:
             self.plot(*args, **kwargs)
 
