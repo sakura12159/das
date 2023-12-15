@@ -83,10 +83,10 @@ def createAction(text, parent, status_tip, connect_func, short_cut=0):
 def normalizeToGrayScale(data):
     """数据标准化至0-255"""
 
-    data = (data - np.min(data)) / (np.max(data) - np.min(data))
-    data *= 255
+    normalized_data = (data - np.min(data)) / (np.max(data) - np.min(data))
+    normalized_data *= 255
 
-    return data
+    return normalized_data
 
 
 def toAmplitude(data, sampling_times):
@@ -96,15 +96,6 @@ def toAmplitude(data, sampling_times):
     data[1:len(data) // 2] *= 2
 
     return data
-
-
-def fixDateLength(sampling_times):
-    """检验//操作时数据的长度奇偶性"""
-
-    if sampling_times % 2 == 1:
-        sampling_times += 1
-
-    return sampling_times
 
 
 def calculateTimeDomainFeatures(data):
