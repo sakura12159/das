@@ -93,7 +93,8 @@ def toAmplitude(data, sampling_times):
     """fft后数据处理作幅值图"""
 
     data = np.abs(np.fft.fft(data)) / sampling_times
-    data[1:len(data) // 2] *= 2
+    data[0] = 0
+    data *= 2
 
     return data
 
@@ -203,6 +204,7 @@ def OSTU(data):
     data = normalizeToGrayScale(data)
     height, width = data.shape
     max_gray_scale = 0
+    threshold = 0
     # 遍历每一个灰度层
     for i in range(255):
         # 使用numpy直接对数组进行计算
@@ -225,23 +227,16 @@ def convertDataUnit(data, sr, src, aim):
 
     if src == 'PD':
         if aim == 'SR':
-
             return data * 11.6e-9 * sr
-
         elif aim == 'S':
             data = data * 11.6e-9 * sr
             x = data.shape[1]
             x = np.linspace(0, x, x)
-
-            return integrate.cumtrapz(data, x, initial=0) * 10e6
-
+            return integrate.cumtrapz(data, x, initial=0) * 1e6
     elif src == 'SR':
         if aim == 'PD':
-
             return data / 11.6e-9 / sr
-
         elif aim == 'S':
             x = data.shape[1]
             x = np.linspace(0, x, x)
-
-            return
+            return integrate.cumtrapz(data, x, initial=0) * 1e6
