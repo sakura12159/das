@@ -17,8 +17,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, qApp, QTabWi
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from scipy.signal import hilbert, filtfilt, spectrogram, detrend, iircomb, iirnotch, iirpeak, cheby2, bessel, ellip, \
-    cheby1, butter, buttord, cheb1ord, cheb2ord, \
-    ellipord
+    cheby1, butter, buttord, cheb1ord, cheb2ord, ellipord
 from scipy.signal.windows import *
 from image import *
 from utils import *
