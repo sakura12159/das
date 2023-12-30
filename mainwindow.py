@@ -1,701 +1,25 @@
+import base64
 import ctypes
-import re
+import os
 import sys
 from itertools import cycle
 
 import pandas as pd
-import pyqtgraph as pg
 import pywt
 import soundfile
 from PyEMD import EMD, EEMD, CEEMDAN
 from PyQt5 import QtMultimedia
-from PyQt5.QtCore import QUrl, QRegExp, Qt
-from PyQt5.QtGui import QTransform, QRegExpValidator, QFont, QColor
+from PyQt5.QtCore import QUrl
+from PyQt5.QtGui import QTransform, QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, qApp, QTabWidget, QTableWidget, \
-    QAbstractItemView, QTableWidgetItem, QHeaderView, QTabBar, QWidget, QScrollArea, QScrollBar, QLineEdit, QLabel, \
-    QComboBox, QCheckBox, QPushButton, QRadioButton, QSpinBox, QHBoxLayout, QVBoxLayout, QDialog
+    QAbstractItemView, QTableWidgetItem, QHeaderView, QTabBar, QWidget, QScrollArea, QScrollBar, QMessageBox
+from image import *
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from scipy.signal import hilbert, filtfilt, spectrogram, detrend, iircomb, iirnotch, iirpeak, cheby2, bessel, ellip, \
-    cheby1, butter, buttord, cheb1ord, cheb2ord, ellipord
+from scipy import stats, integrate
+from scipy.signal import hilbert, filtfilt, spectrogram, detrend
 from scipy.signal.windows import *
-from image import *
-from utils import *
-
-
-class Label(QLabel):
-
-    def __init__(self, text):
-        super(Label, self).__init__(text)
-        self.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
-
-
-class PushButton(QPushButton):
-
-    def __init__(self, text):
-        super(PushButton, self).__init__(text)
-        self.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
-
-
-class LineEdit(QLineEdit):
-
-    def __init__(self):
-        super(QLineEdit, self).__init__()
-        self.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
-
-
-class OnlyNumLineEdit(LineEdit):
-    """只能输入数字和"""
-
-    def __init__(self):
-        super(OnlyNumLineEdit, self).__init__()
-        self.regex = QRegExp('[0-9]+')
-        self.validator = QRegExpValidator(self.regex)
-        self.setValidator(self.validator)
-
-
-class NumPointLineEdit(LineEdit):
-    """只能输入数字和."""
-
-    def __init__(self):
-        super(NumPointLineEdit, self).__init__()
-        self.regex = QRegExp('[0-9. ]+')
-        self.validator = QRegExpValidator(self.regex)
-        self.setValidator(self.validator)
-
-
-class ComboBox(QComboBox):
-
-    def __init__(self):
-        super(ComboBox, self).__init__()
-        self.setStyleSheet('font-size: 16px; font-family: "Times New Roman", "Microsoft YaHei";')
-
-
-class RadioButton(QRadioButton):
-
-    def __init__(self, text):
-        super(RadioButton, self).__init__(text)
-        self.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
-
-
-class CheckBox(QCheckBox):
-
-    def __init__(self, text):
-        super(CheckBox, self).__init__(text)
-        self.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
-
-
-class SpinBox(QSpinBox):
-
-    def __init__(self):
-        super(SpinBox, self).__init__()
-        self.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
-
-
-# class FigureCanvas(FigureCanvasQTAgg):
-#     """设置matplotlib图可以鼠标拖动和缩放"""
-#
-#     def __init__(self, figure):
-#         super(FigureCanvas, self).__init__(figure)
-#         self.mouseX = 0  # 获取鼠标按下时的坐标X
-#         self.mouseY = 0  # 获取鼠标按下时的坐标Y
-#         self.buttonPressed = False
-#
-#         self.figure.canvas.mpl_connect("button_press_event", self.buttonPressEvent)
-#         self.figure.canvas.mpl_connect("button_release_event", self.buttonReleaseEvent)
-#         self.figure.canvas.mpl_connect("motion_notify_event", self.motionNotifyEvent)
-#         self.figure.canvas.mpl_connect('scroll_event', self.scrollEvent)
-#
-#     def buttonPressEvent(self, event):
-#         """鼠标按键按下"""
-#
-#         if event.inaxes:  # 判断鼠标是否在axes内
-#             if event.button == 1:  # 判断按下的是否为鼠标左键1（右键是3）
-#                 self.buttonPressed = True
-#                 self.mouseX = event.xdata  # 获取鼠标按下时的坐标X
-#                 self.mouseY = event.ydata  # 获取鼠标按下时的坐标Y
-#
-#     def buttonReleaseEvent(self, event):
-#         """鼠标按键释放"""
-#
-#         if self.buttonPressed:
-#             self.buttonPressed = False  # 鼠标松开，结束移动
-#
-#     def motionNotifyEvent(self, event):
-#         """鼠标移动"""
-#
-#         axes = event.inaxes
-#         if axes:
-#             if self.buttonPressed:  # 按下状态
-#                 # 计算新的坐标原点并移动
-#                 # 获取当前最新鼠标坐标与按下时坐标的差值
-#                 x = event.xdata - self.mouseX
-#                 y = event.ydata - self.mouseY
-#                 # 获取当前原点和最大点的4个位置
-#                 x_min, x_max = axes.get_xlim()
-#                 y_min, y_max = axes.get_ylim()
-#
-#                 x_min = x_min - x
-#                 x_max = x_max - x
-#                 y_min = y_min - y
-#                 y_max = y_max - y
-#
-#                 axes.set_xlim(x_min, x_max)
-#                 axes.set_ylim(y_min, y_max)
-#                 self.figure.canvas.draw()  # 绘图动作实时反映在图像上
-#
-#     def scrollEvent(self, event):
-#         """鼠标滚轮事件"""
-#
-#         axes = event.inaxes
-#         x_min, x_max = axes.get_xlim()
-#         y_min, y_max = axes.get_ylim()
-#         if not hasattr(self, 'xfanwei'):
-#             self.x_range = (x_max - x_min) / 10
-#             self.y_range = (y_max - y_min) / 10
-#         if event.button == 'up':
-#             axes.set(xlim=(x_min + self.x_range, x_max - self.x_range))
-#             axes.set(ylim=(y_min + self.y_range, y_max - self.y_range))
-#         elif event.button == 'down':
-#             axes.set(xlim=(x_min - self.x_range, x_max + self.x_range))
-#             axes.set(ylim=(y_min - self.y_range, y_max + self.y_range))
-#         self.figure.canvas.draw_idle()  # 绘图动作实时反映在图像上
-
-
-class MyPlotWidget(pg.PlotWidget):
-    """带字体、可显示数据"""
-
-    def __init__(self, title, xlabel, ylabel, grid=False, check_mouse=True):
-        super(MyPlotWidget, self).__init__()
-        self.check_mouse = check_mouse
-        self.setTitle(f'<font face="Microsoft YaHei" size="5">{title}</font>')
-        self.setLabel('bottom', f'<font face="Microsoft YaHei" size="3">{xlabel}</font>')
-        self.setLabel('left', f'<font face="Microsoft YaHei" size="3">{ylabel}</font>')
-        self.getAxis('bottom').setTickFont(QFont('Times New Roman'))
-        self.getAxis('left').setTickFont(QFont('Times New Roman'))
-        self.getAxis('left').setWidth(50)
-        if check_mouse:
-            self.initPlotItem(title, xlabel, ylabel, grid)
-
-    def initPlotItem(self, title, xlabel, ylabel, grid):
-        """初始化一个plotitem"""
-
-        self.plot_item = pg.PlotItem()
-        self.plot_item.setTitle(f'<font face="Microsoft YaHei" size="5">{title}</font>')
-        self.plot_item.setLabel('bottom', f'<font face="Microsoft YaHei" size="3">{xlabel}</font>')
-        self.plot_item.setLabel('left', f'<font face="Microsoft YaHei" size="3">{ylabel}</font>')
-        self.plot_item.getAxis('bottom').setTickFont(QFont('Times New Roman'))
-        self.plot_item.getAxis('left').setTickFont(QFont('Times New Roman'))
-        self.plot_item.getAxis('left').setWidth(50)
-        if grid:
-            self.plot_item.showGrid(x=True, y=True, alpha=0.2)
-        self.setCentralItem(self.plot_item)
-
-    def updateAxesRange(self):
-        """更新xy轴范围"""
-
-        self.data = np.nan_to_num(np.array(self.plot_data_item.getData()))  # 获取绘图数据，并把其中可能存在的nan值替换为0
-        self.xmin, self.xmax = np.min(self.data[0]), np.max(self.data[0])
-        self.ymin, self.ymax = np.min(self.data[1]), np.max(self.data[1])
-        self.plot_item.setXRange(self.xmin, self.xmax)
-        self.plot_item.setYRange(self.ymin, self.ymax)
-
-    def draw(self, *args, **kwargs):
-        """让plotwidget中的plotitem绘图"""
-
-        if self.check_mouse:
-            self.plot_data_item = self.plot_item.plot(*args, **kwargs)
-            self.updateAxesRange()
-            # self.plot_item.scene().sigMouseMoved.connect(self.mouseMoved)  # 绘图之后绑定槽函数，否则会导致scene快速移动
-        else:
-            self.plot(*args, **kwargs)
-
-    def mouseMoved(self, pos):
-        """鼠标移动槽函数"""
-
-        if hasattr(self, 'text_item'):
-            self.plot_item.removeItem(self.text_item)
-            self.plot_item.removeItem(self.vertical_line)
-            self.plot_item.removeItem(self.horizontal_line)
-            self.plot_item.removeItem(self.scatter_plot_item)
-
-        # 数据标签
-        self.text_item = pg.TextItem(color=QColor('black'), border=pg.mkPen(QColor('black')),
-                                     fill=pg.mkBrush(QColor('yellow')))
-        self.text_item.setFont(QFont('Times New Roman', 10))
-        self.plot_item.addItem(self.text_item)
-
-        # 十字线
-        self.vertical_line = pg.InfiniteLine(angle=90, pen=pg.mkPen('black', width=0.5, style=Qt.DashLine),
-                                             movable=False)
-        self.horizontal_line = pg.InfiniteLine(angle=0, pen=pg.mkPen('black', width=0.5, style=Qt.DashLine),
-                                               movable=False)
-        self.plot_item.addItem(self.vertical_line, ignoreBounds=True)
-        self.plot_item.addItem(self.horizontal_line, ignoreBounds=True)
-
-        # 数据点
-        self.scatter_plot_item = pg.ScatterPlotItem()
-        self.plot_item.addItem(self.scatter_plot_item)
-
-        # 设置各item位置
-        vb = self.plot_item.vb
-        if self.plot_item.sceneBoundingRect().contains(pos):
-            mouse_point = vb.mapSceneToView(pos)
-            x, y = float(mouse_point.x()), float(mouse_point.y())
-            if self.xmin <= x <= self.xmax and self.ymin <= y <= self.ymax:
-                index = self.searchPointIndex(x, y)
-                self.scatter_plot_item.setData(pos=[[self.data[0][index], self.data[1][index]]], size=10,
-                                               pen=QColor('red'))
-                self.text_item.setText(f'x: {self.data[0][index]}\ny: {self.data[1][index]}')
-                self.text_item.setPos(self.data[0][index], self.data[1][index])
-                self.vertical_line.setPos(self.data[0][index])
-                self.horizontal_line.setPos(self.data[1][index])
-
-    def searchPointIndex(self, xpos, ypos):
-        """寻找x坐标附近的点，返回该点的索引"""
-
-        # distances = []
-        # for i in range(self.data.shape[1]):
-        #     distances.append(np.sqrt((xpos - self.data[0][i]) ** 2 + (ypos - self.data[1][i]) ** 2))
-        # index = distances.index(min(distances))
-        #
-        # return index
-
-        distances = {}
-        for i in range(self.data.shape[1]):
-            distances[np.sqrt((xpos - self.data[0][i]) ** 2 + (ypos - self.data[1][i]) ** 2)] = i
-
-        return distances[sorted(distances)[0]]
-
-
-class FilterI(object):
-    """滤波器相关的类"""
-
-    def __init__(self, filter_name):
-        """滤波器的一些参数"""
-
-        self.filter_names = {'Butterworth': butter, 'Chebyshev type I': cheby1, 'Chebyshev type II': cheby2,
-                             'Elliptic (Cauer)': ellip, 'Bessel/Thomson': bessel}
-        self.filter_name = filter_name
-        self.filter = self.filter_names[filter_name]
-        self.order = 4
-        self.Wn = 0.02
-        self.btype = ['lowpass', 'highpass', 'bandpass', 'bandstop']
-        self.cal_names = {butter: buttord, cheby1: cheb1ord, cheby2: cheb2ord, ellip: ellipord}
-        self.method = self.btype[0]
-        self.wp = 0.2
-        self.ws = 0.3
-        self.rp = 5
-        self.rs = 40
-        self.gpass = 3
-        self.gstop = 40
-        self.analog = False
-        self.norms = ['phase', 'delay', 'mag']
-        self.norm = 'phase'
-        self.flag = True
-
-        self.initDialog()
-        self.initLayout()
-
-    def initDialog(self):
-        """初始化对话框"""
-
-        self.dialog = QDialog()
-        self.dialog.setWindowTitle(f'设计{self.filter_name}滤波器')
-
-        self.combx_label = Label('滤波器类型')
-        self.combx = ComboBox()
-        self.combx.setToolTip('滤波器的类型')
-        self.combx.addItems(self.btype)
-        self.combx.setCurrentText(self.method)
-        self.combx.currentIndexChanged.connect(self.resetCalculateParmas)
-
-        self.checkbx = CheckBox('模拟滤波器')
-        self.checkbx.setToolTip('勾选时返回模拟滤波器，否则返回数字滤波器')
-        self.checkbx.setChecked(self.analog)
-        self.checkbx.stateChanged.connect(self.resetCalculateParmas)
-
-        # 计算区域组件
-        cal_label = Label('计算滤波器阶数和自然频率')
-        cal_label.setAlignment(Qt.AlignHCenter)
-
-        wp_label = Label('通带频率（wp）')
-        self.wp_le = NumPointLineEdit()
-        self.wp_le.setText(str(self.wp))
-        self.wp_le.setToolTip('与带奎斯特频率的比值\n'
-                              '例如：\n'
-                              'lowpass: wp = 0.2, ws = 0.3\n'
-                              'highpass: wp = 0.3, ws = 0.2\n'
-                              'bandpass: wp = [0.2, 0.5], ws = [0.1, 0.6]\n'
-                              'bandstop: wp = [0.1, 0.6], ws = [0.2, 0.5]')
-        self.wp_le.textChanged.connect(self.resetCalculateParmas)
-
-        ws_label = Label('阻带频率（ws）')
-        self.ws_le = NumPointLineEdit()
-        self.ws_le.setText(str(self.ws))
-        self.ws_le.setToolTip('与带奎斯特频率的比值\n'
-                              '例如：\n'
-                              'lowpass: wp = 0.2, ws = 0.3\n'
-                              'highpass: wp = 0.3, ws = 0.2\n'
-                              'bandpass: wp = [0.2, 0.5], ws = [0.1, 0.6]\n'
-                              'bandstop: wp = [0.1, 0.6], ws = [0.2, 0.5]')
-        self.ws_le.textChanged.connect(self.resetCalculateParmas)
-
-        gpass_label = Label('通带损失（gpass）')
-        self.gpass_le = OnlyNumLineEdit()
-        self.gpass_le.setText(str(self.gpass))
-        self.gpass_le.setToolTip('通带的最大损失（dB）')
-        self.gpass_le.textChanged.connect(self.resetCalculateParmas)
-
-        gstop_label = Label('阻带衰减（gstop）')
-        self.gstop_le = OnlyNumLineEdit()
-        self.gstop_le.setText(str(self.gstop))
-        self.gstop_le.setToolTip('阻带最小衰减（dB）')
-        self.gstop_le.textChanged.connect(self.resetCalculateParmas)
-
-        cal_order_label = Label('阶数（N）')
-        self.cal_order_le = OnlyNumLineEdit()
-        self.cal_order_le.setFocusPolicy(Qt.NoFocus)
-
-        cal_Wn_label = Label('自然频率（Wn）')
-        self.cal_Wn_le = NumPointLineEdit()
-        self.cal_Wn_le.setFocusPolicy(Qt.NoFocus)
-
-        self.cal_btn = PushButton('计算')
-        self.cal_btn.clicked.connect(self.calculateParams)
-
-        hbox1 = QHBoxLayout()
-        hbox2 = QHBoxLayout()
-        hbox3 = QHBoxLayout()
-        hbox4 = QHBoxLayout()
-        self.cal_vbox = QVBoxLayout()
-
-        hbox1.addWidget(self.combx_label)
-        hbox1.addWidget(self.combx)
-        hbox1.addStretch(1)
-        hbox1.addWidget(self.checkbx)
-
-        hbox2.addWidget(wp_label)
-        hbox2.addWidget(self.wp_le)
-        hbox2.addStretch(1)
-        hbox2.addWidget(ws_label)
-        hbox2.addWidget(self.ws_le)
-
-        hbox3.addWidget(gpass_label)
-        hbox3.addWidget(self.gpass_le)
-        hbox3.addStretch(1)
-        hbox3.addWidget(gstop_label)
-        hbox3.addWidget(self.gstop_le)
-
-        hbox4.addWidget(cal_order_label)
-        hbox4.addWidget(self.cal_order_le)
-        hbox4.addStretch(1)
-        hbox4.addWidget(cal_Wn_label)
-        hbox4.addWidget(self.cal_Wn_le)
-
-        self.cal_vbox.addWidget(cal_label)
-        self.cal_vbox.addSpacing(10)
-        self.cal_vbox.addLayout(hbox1)
-        self.cal_vbox.addSpacing(10)
-        self.cal_vbox.addLayout(hbox2)
-        self.cal_vbox.addSpacing(10)
-        self.cal_vbox.addLayout(hbox3)
-        self.cal_vbox.addSpacing(10)
-        self.cal_vbox.addLayout(hbox4)
-        self.cal_vbox.addSpacing(10)
-        self.cal_vbox.addWidget(self.cal_btn)
-
-        # 滤波器系数组件
-        self.filter_params_label = Label('滤波器系数')
-        self.filter_params_label.setAlignment(Qt.AlignHCenter)
-
-        self.rp_label = Label('最大纹波（rp）')
-        self.rp_le = NumPointLineEdit()
-        self.rp_le.setText(str(self.rp))
-        self.rp_le.setToolTip('通带最大纹波（dB）')
-
-        self.rs_label = Label('最小衰减（rs）')
-        self.rs_le = NumPointLineEdit()
-        self.rs_le.setText(str(self.rs))
-        self.rs_le.setToolTip('阻带所需最小衰减（dB）')
-
-        self.order_label = Label('阶数（N）')
-        self.order_le = OnlyNumLineEdit()
-        self.order_le.setText(str(self.order))
-        self.order_le.setToolTip('滤波器的阶数')
-
-        self.Wn_label = Label('自然频率（Wn）')
-        self.Wn_le = NumPointLineEdit()
-        self.Wn_le.setText(str(self.Wn))
-        self.Wn_le.setToolTip('与奈奎斯特频率的比值')
-
-        self.btn = PushButton('确定')
-        self.btn.clicked.connect(self.update)
-        self.btn.clicked.connect(self.design)
-
-        hbox5 = QHBoxLayout()
-        hbox6 = QHBoxLayout()
-        self.vbox = QVBoxLayout()
-
-        hbox5.addWidget(self.rp_label)
-        hbox5.addWidget(self.rp_le)
-        hbox5.addStretch(1)
-        hbox5.addWidget(self.rs_label)
-        hbox5.addWidget(self.rs_le)
-
-        hbox6.addWidget(self.order_label)
-        hbox6.addWidget(self.order_le)
-        hbox6.addStretch(1)
-        hbox6.addWidget(self.Wn_label)
-        hbox6.addWidget(self.Wn_le)
-
-        self.vbox.addSpacing(10)
-        self.vbox.addWidget(self.filter_params_label)
-        self.vbox.addSpacing(10)
-        self.vbox.addLayout(hbox5)
-        self.vbox.addSpacing(10)
-        self.vbox.addLayout(hbox6)
-
-        self.norm_label = Label('标准化')
-        self.norm_combx = ComboBox()
-        self.norm_combx.setToolTip('截止频率标准化')
-        self.norm_combx.addItems(self.norms)
-        self.norm_combx.setCurrentText(self.norm)
-
-    def initLayout(self):
-        """根据选择的滤波器种类初始化布局"""
-
-        if self.filter == butter:
-            self.rp_label.setEnabled(False)
-            self.rp_le.setEnabled(False)
-            self.rs_label.setEnabled(False)
-            self.rs_le.setEnabled(False)
-        elif self.filter == cheby1:
-            self.rs_label.setEnabled(False)
-            self.rs_le.setEnabled(False)
-        elif self.filter == cheby2:
-            self.rp_label.setEnabled(False)
-            self.rp_le.setEnabled(False)
-        elif self.filter == bessel:
-
-            self.vbox = QVBoxLayout()
-            hbox1 = QHBoxLayout()
-            hbox2 = QHBoxLayout()
-
-            hbox1.addWidget(self.combx_label)
-            hbox1.addWidget(self.combx)
-            hbox1.addStretch(1)
-            hbox1.addWidget(self.norm_label)
-            hbox1.addWidget(self.norm_combx)
-            hbox1.addStretch(1)
-            hbox1.addWidget(self.checkbx)
-            hbox2.addWidget(self.order_label)
-            hbox2.addWidget(self.order_le)
-            hbox2.addStretch(1)
-            hbox2.addWidget(self.Wn_label)
-            hbox2.addWidget(self.Wn_le)
-
-            self.vbox.addSpacing(5)
-            self.vbox.addWidget(self.filter_params_label)
-            self.vbox.addLayout(hbox1)
-            self.vbox.addSpacing(5)
-            self.vbox.addLayout(hbox2)
-            self.vbox.addSpacing(5)
-            self.vbox.addWidget(self.btn)
-            self.dialog.setLayout(self.vbox)
-
-    def update(self):
-        """更新滤波器参数"""
-
-        self.method = self.combx.currentText()
-
-        self.wp = self.wp_le.text()
-
-        self.ws = self.ws_le.text()
-
-        self.rp = int(self.rp_le.text())
-
-        self.rs = int(self.rs_le.text())
-
-        self.gpass = int(self.gpass_le.text())
-
-        self.gstop = int(self.gstop_le.text())
-
-        self.analog = self.checkbx.isChecked()
-
-        self.norm = self.norm_combx.currentText()
-
-        self.order = int(self.order_le.text())
-
-        self.Wn = self.Wn_le.text()
-        if self.method == 'lowpass' or self.method == 'highpass':
-            self.Wn = float(self.Wn)
-        else:
-            self.Wn = [float(i) for i in re.findall('[0]{1}.{1}\d+', self.Wn)]
-
-    def calculateParams(self):
-        """使用函数计算滤波器的阶数和自然频率并填入滤波器参数中"""
-
-        self.wp = self.wp_le.text()
-        self.ws = self.ws_le.text()
-        self.analog = self.checkbx.isChecked()
-        self.method = self.combx.currentText()
-
-        if self.flag:
-            if self.method == 'lowpass' or self.method == 'highpass':
-                wp = float(self.wp)
-                ws = float(self.ws)
-            else:
-                wp = [float(i) for i in re.findall('[0]{1}.{1}\d+', self.wp)]
-                ws = [float(i) for i in re.findall('[0]{1}.{1}\d+', self.ws)]
-
-            try:
-                self.cal_order, self.cal_Wn = self.cal_names[self.filter](wp=wp, ws=ws, gpass=self.gpass,
-                                                                          gstop=self.gstop, analog=self.analog)
-
-            except Exception as err:
-                printError(err)
-
-            self.cal_order_le.setText(str(self.cal_order))
-            self.cal_Wn_le.setText(str(self.cal_Wn))
-            self.cal_btn.setText('输入阶数与自然频率')
-            self.flag = False
-
-        else:
-            self.order_le.setText(str(self.cal_order))
-            self.Wn_le.setText(str(self.cal_Wn))
-
-    def resetCalculateParmas(self):
-        """每次参数改动后重置计算按钮"""
-
-        self.flag = True
-        self.cal_order_le.setText('')
-        self.cal_Wn_le.setText('')
-        self.cal_btn.setText('计算')
-
-    def design(self):
-        """设计滤波器"""
-        try:
-            if self.filter == butter:
-                self.b, self.a = self.filter(N=self.order, Wn=self.Wn, btype=self.method, analog=self.analog)
-            elif self.filter == cheby1:
-                self.b, self.a = self.filter(N=self.order, rp=self.rp, Wn=self.Wn, btype=self.method,
-                                             analog=self.analog)
-            elif self.filter == cheby2:
-                self.b, self.a = self.filter(N=self.order, rs=self.rs, Wn=self.Wn, btype=self.method,
-                                             analog=self.analog)
-            elif self.filter == ellip:
-                self.b, self.a = self.filter(N=self.order, rp=self.rp, rs=self.rs, Wn=self.Wn, btype=self.method,
-                                             analog=self.analog)
-            elif self.filter == bessel:
-                self.b, self.a = self.filter(N=self.order, Wn=self.Wn, btype=self.method, analog=self.analog,
-                                             norm=self.norm)
-
-        except Exception as err:
-            printError(err)
-
-
-class FilterII(object):
-    """滤波器相关的类"""
-
-    def __init__(self, filter_name):
-        """滤波器一些参数"""
-
-        self.filter_names = {'Notch Digital Filter': iirnotch, 'Peak (Resonant) Digital Filter': iirpeak,
-                             'Notching or Peaking Digital Comb Filter': iircomb}
-        self.filter_name = filter_name
-        self.filter = self.filter_names[filter_name]
-        self.w0 = 0.5
-        self.Q = 30
-        self.fs = 2.0
-        self.ftype = 'notch'
-        self.pass_zero = False
-
-        self.initDialog()
-
-    def initDialog(self):
-        """初始化对话框"""
-
-        self.dialog = QDialog()
-        self.dialog.setWindowTitle(f'设计{self.filter_name}滤波器')
-
-        filter_params_label = Label('滤波器参数')
-        filter_params_label.setAlignment(Qt.AlignHCenter)
-
-        W0_label = Label('移除频率')
-        self.W0_le = NumPointLineEdit()
-        self.W0_le.setText(str(self.w0))
-        self.W0_le.setToolTip('从信号中移除的频率，值等于与奈奎斯特频率的比值')
-
-        Q_label = Label('品质因数')
-        self.Q_le = NumPointLineEdit()
-        self.Q_le.setToolTip('表征notch类滤波器-3dB带宽的无量纲系数，与中心频率有关')
-        self.Q_le.setText(str(self.Q))
-
-        self.btn = PushButton('确定')
-        self.btn.clicked.connect(self.update)
-        self.btn.clicked.connect(self.design)
-
-        hbox = QHBoxLayout()
-        vbox = QVBoxLayout()
-
-        hbox.addWidget(W0_label)
-        hbox.addWidget(self.W0_le)
-        hbox.addStretch(1)
-        hbox.addWidget(Q_label)
-        hbox.addWidget(self.Q_le)
-
-        vbox.addSpacing(5)
-        vbox.addWidget(filter_params_label)
-        vbox.addSpacing(10)
-        vbox.addLayout(hbox)
-        vbox.addSpacing(5)
-
-        if self.filter == iircomb:
-            ftype_label = Label('梳式滤波器类型')
-            self.ftype_combx = ComboBox()
-            self.ftype_combx.setToolTip('生成的梳式滤波器类型，如果为notch，品质因子应用于波谷，如果为peak，品质因子应用与波峰')
-            self.ftype_combx.addItems(['notch', 'peak'])
-            self.ftype_combx.setCurrentIndex(0)
-
-            self.pass_zero_checkbx = CheckBox('非零')
-            self.pass_zero_checkbx.setToolTip('默认为否，滤波器波谷集中于频率[0, w0, 2*w0, …]，'
-                                              '波峰集中于中点[w0/2, 3*w0/2, 5*w0/2, …]；\n'
-                                              '如果为是，波谷集中于[w0/2, 3*w0/2, 5*w0/2, …]，'
-                                              '波峰集中于[0, w0, 2*w0, …]')
-            hbox1 = QHBoxLayout()
-            hbox1.addWidget(ftype_label)
-            hbox1.addWidget(self.ftype_combx)
-            hbox1.addStretch(1)
-            hbox1.addWidget(self.pass_zero_checkbx)
-            vbox.addLayout(hbox1)
-            vbox.addSpacing(10)
-
-        vbox.addWidget(self.btn)
-        self.dialog.setLayout(vbox)
-
-    def update(self):
-        """更新滤波器参数"""
-
-        self.w0 = float(self.W0_le.text())
-
-        self.Q = float(self.Q_le.text())
-
-        if self.filter == iircomb:
-            self.ftype = self.ftype_combx.currentText()
-            self.pass_zero = self.pass_zero_checkbx.isChecked()
-
-    def design(self):
-        """设计comb类滤波器"""
-        try:
-            if self.filter == iircomb:
-                self.b, self.a = self.filter(w0=self.w0, Q=self.Q, ftype=self.ftype, fs=self.fs,
-                                             pass_zero=self.pass_zero)
-            else:
-                self.b, self.a = self.filter(w0=self.w0, Q=self.Q, fs=self.fs)
-
-        except Exception as err:
-            printError(err)
+from widgets import *
 
 
 class MainWindow(QMainWindow):
@@ -703,16 +27,32 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super(MainWindow, self).__init__()
+        self.initImages()
         self.initMainWindow()
         self.initGlobalParams()
         self.initUI()
         self.initMenu()
-        self.initTabWidget()
         self.initLayout()
+
+    @staticmethod
+    def initImages():
+        """初始化所需图片"""
+        write_data = []
+        for picture_name in os.listdir('Image/'):
+            filename = picture_name.replace('.', '_')
+            open_pic = open(os.path.join('Image/', picture_name), 'rb')
+            b64str = base64.b64encode(open_pic.read())
+            open_pic.close()
+            # 注意这边b64str一定要加上.decode()
+            write_data.append(f'{filename} = "{b64str.decode()}"\n')
+
+        f = open('image.py', 'w+')
+        for data in write_data:
+            f.write(data)
+        f.close()
 
     def initMainWindow(self):
         """获取屏幕分辨率，设置主窗口初始大小"""
-
         self.screen = QApplication.desktop()
         self.screen_height = int(self.screen.screenGeometry().height() * 0.8)
         self.screen_width = int(self.screen.screenGeometry().width() * 0.8)
@@ -720,7 +60,6 @@ class MainWindow(QMainWindow):
 
     def initGlobalParams(self):
         """初始化全局参数，即每次选择文件不改变"""
-
         # plt绘图参数
         plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'Times New Roman']
         plt.rcParams['axes.unicode_minus'] = False
@@ -743,77 +82,72 @@ class MainWindow(QMainWindow):
 
     def initUI(self):
         """初始化ui"""
-
         self.status_bar = self.statusBar()  # 状态栏
         self.status_bar.setStyleSheet('font-size: 15px; font-family: "Times New Roman", "SimHei";')
         self.menu_bar = self.menuBar()  # 菜单栏
         self.menu_bar.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "SimHei";')
         self.setWindowTitle('DAS数据查看')
-
-        getPicture(icon_jpg, 'icon.jpg')
-        self.setWindowIcon(QIcon('icon.jpg'))
-        os.remove('icon.jpg')
+        self.setPicture(icon_jpg, 'icon.jpg', None, window_icon=True)
 
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('myappid')  # 设置任务栏图标
 
     def initMenu(self):
         """初始化菜单"""
-
         # 文件
-        self.file_menu = createMenu('文件', self.menu_bar)
+        self.file_menu = Menu('文件', self.menu_bar)
 
         # 导入
-        self.import_action = createAction('导入', self.file_menu, '导入数据文件', self.importData, short_cut='Ctrl+I')
+        self.import_action = Action('导入', self.file_menu, '导入数据文件', self.importData, shortcut='Ctrl+I')
 
         # 文件-导出
-        self.export_action = createAction('导出', self.file_menu, '导出数据', self.exportData, short_cut='Ctrl+E')
+        self.export_action = Action('导出', self.file_menu, '导出数据', self.exportData, shortcut='Ctrl+E')
 
         self.file_menu.addSeparator()
 
         # 退出
-        self.quit_action = createAction('退出', self.file_menu, '退出软件', qApp.quit, short_cut='Ctrl+Q')
+        self.quit_action = Action('退出', self.file_menu, '退出软件', qApp.quit, shortcut='Ctrl+Q')
 
         # 操作
-        self.operation_menu = createMenu('操作', self.menu_bar, enabled=False)
+        self.operation_menu = Menu('操作', self.menu_bar, enabled=False)
 
         # 操作-计算信噪比
-        self.calculate_snr_action = createAction('计算信噪比', self.operation_menu, '计算选中数据的信噪比',
-                                                 self.calculateSNRDialog)
+        self.calculate_snr_action = Action('计算信噪比', self.operation_menu, '计算选中数据的信噪比',
+                                           self.calculateSNRDialog)
 
         self.operation_menu.addSeparator()
 
         # 操作-裁剪数据（时间）
-        self.set_time_range_action = createAction('查看范围（时间）', self.operation_menu,
-                                                  '按时间设置数据查看范围', self.setTimeRangeDialog)
+        self.set_time_range_action = Action('查看范围（时间）', self.operation_menu,
+                                            '按时间设置数据查看范围', self.setTimeRangeDialog)
 
         # 操作-裁剪数据（通道号）
-        self.set_channel_range_action = createAction('查看范围（通道）', self.operation_menu,
-                                                     '按通道设置数据查看范围', self.setChannelRangeDialog)
+        self.set_channel_range_action = Action('查看范围（通道）', self.operation_menu,
+                                               '按通道设置数据查看范围', self.setChannelRangeDialog)
 
         self.operation_menu.addSeparator()
 
         # 操作-设置通道切换步长
-        self.change_channel_number_step_action = createAction('设置通道切换步长', self.operation_menu, '设置切换通道时的步长',
-                                                              self.changeChannelNumberStep)
+        self.change_channel_number_step_action = Action('设置通道切换步长', self.operation_menu, '设置切换通道时的步长',
+                                                        self.changeChannelNumberStep)
 
         # 操作-设置文件读取数量
-        self.change_files_read_number_action = createAction('设置文件读取数量', self.operation_menu,
-                                                            '设置从表格选中文件时的读取数量，从选中的文件开始算起',
-                                                            self.changeFilesReadNumberDialog)
+        self.change_files_read_number_action = Action('设置文件读取数量', self.operation_menu,
+                                                      '设置从表格选中文件时的读取数量，从选中的文件开始算起',
+                                                      self.changeFilesReadNumberDialog)
 
         # 绘图
-        self.plot_menu = createMenu('绘图', self.menu_bar, enabled=False)
+        self.plot_menu = Menu('绘图', self.menu_bar, enabled=False)
 
         # 绘图-二值图
-        self.plot_binary_image_action = createAction('二值图', self.plot_menu, '通过设置或计算阈值来绘制二值图',
-                                                     self.binaryImageDialog)
+        self.plot_binary_image_action = Action('二值图', self.plot_menu, '通过设置或计算阈值来绘制二值图',
+                                               self.binaryImageDialog)
 
         # 绘图-热力图
-        self.plot_heatmap_action = createAction('热力图', self.plot_menu, '绘制热力图',
-                                                lambda: self.plotFalseColorImage(type='heatmap'))
+        self.plot_heatmap_action = Action('热力图', self.plot_menu, '绘制热力图',
+                                          lambda: self.plotFalseColorImage(type='heatmap'))
 
         # 绘图-数据特征
-        self.plot_data_features_menu = createMenu('数据特征', self.plot_menu, status_tip='绘制所有通道的时域或频域特征图')
+        self.plot_data_features_menu = Menu('数据特征', self.plot_menu, status_tip='绘制所有通道的时域或频域特征图')
 
         # 绘图-数据特征-最大值等
         self.time_domain_chars_text = ['最大值', '峰值', '最小值', '平均值', '峰峰值', '绝对平均值', '均方根值', '方根幅值',
@@ -822,119 +156,108 @@ class MainWindow(QMainWindow):
         self.fre_domain_chars_text = ['重心频率', '平均频率', '均方根频率', '均方频率', '频率方差', '频率标准差']
 
         for i in self.time_domain_chars_text:
-            _ = createAction(i, self.plot_data_features_menu, f'绘制{i}图', self.plotTimeDomainFeature)
+            _ = Action(i, self.plot_data_features_menu, f'绘制{i}图', self.plotTimeDomainFeature)
 
         # 时域和频域特征之间的分隔线
         self.plot_data_features_menu.addSeparator()
 
         for i in self.fre_domain_chars_text:
-            _ = createAction(i, self.plot_data_features_menu, f'绘制{i}图', self.plotFrequencyDomainFeature)
+            _ = Action(i, self.plot_data_features_menu, f'绘制{i}图', self.plotFrequencyDomainFeature)
 
         # 绘图-多通道云图
-        self.plot_multichannel_image_action = createAction('多通道云图', self.plot_menu, '绘制多通道云图',
-                                                           self.plotMultiWavesImage)
+        self.plot_multichannel_image_action = Action('多通道云图', self.plot_menu, '绘制多通道云图',
+                                                     self.plotMultiWavesImage)
 
         # 绘图-应变图
-        self.plot_strain_image_action = createAction('应变图', self.plot_menu, '绘制应变图，单位为微应变', self.plotStrain)
+        self.plot_strain_image_action = Action('应变图', self.plot_menu, '绘制应变图，单位为微应变', self.plotStrain)
 
         self.plot_menu.addSeparator()
 
         # 绘图-功率谱密度图
-        self.plot_psd_menu = createMenu('功率谱密度图', self.plot_menu)
+        self.plot_psd_menu = Menu('功率谱密度图', self.plot_menu)
 
         # 绘图-功率谱密度图-功率谱密度图
-        self.plot_psd_action = createAction('功率谱密度图', self.plot_psd_menu, '绘制功率谱密度图', self.plotPSD)
+        self.plot_psd_action = Action('功率谱密度图', self.plot_psd_menu, '绘制功率谱密度图', self.plotPSD)
 
         # 绘图-功率谱密度图-功率谱密度色块图
-        self.plot_2d_psd_action = createAction('功率谱密度色块图', self.plot_psd_menu, '绘制功率谱密度色块图', self.plot2dPSD)
+        self.plot_2d_psd_action = Action('功率谱密度色块图', self.plot_psd_menu, '绘制功率谱密度色块图', self.plot2dPSD)
 
         # 绘图-功率谱密度图-三维功率谱密度图
-        self.plot_3d_psd_action = createAction('三维功率谱密度图', self.plot_psd_menu, '绘制三维功率谱密度图', self.plot3dPSD)
+        self.plot_3d_psd_action = Action('三维功率谱密度图', self.plot_psd_menu, '绘制三维功率谱密度图', self.plot3dPSD)
 
         # 绘图-谱
-        self.plot_spectrum_menu = createMenu('谱', self.plot_menu)
+        self.plot_spectrum_menu = Menu('谱', self.plot_menu)
 
         # 绘图-谱-幅度谱
-        self.plot_mag_spectrum_action = createAction('幅度谱', self.plot_spectrum_menu, '绘制幅度谱',
-                                                     self.plotMagnitudeSpectrum)
+        self.plot_mag_spectrum_action = Action('幅度谱', self.plot_spectrum_menu, '绘制幅度谱',
+                                               self.plotMagnitudeSpectrum)
 
         # 绘图-谱-幅度谱色块图
-        self.plot_2d_mag_spectrum_action = createAction('幅度谱色块图', self.plot_spectrum_menu, '绘制幅度谱色块图',
-                                                        self.plot2dMagnitudeSpectrum)
+        self.plot_2d_mag_spectrum_action = Action('幅度谱色块图', self.plot_spectrum_menu, '绘制幅度谱色块图',
+                                                  self.plot2dMagnitudeSpectrum)
 
         # 绘图-谱-三维幅度谱
-        self.plot_3d_mag_psd_action = createAction('三维幅度谱', self.plot_spectrum_menu, '绘制三维幅度谱',
-                                                   self.plot3dMagnitudeSpectrum)
+        self.plot_3d_mag_psd_action = Action('三维幅度谱', self.plot_spectrum_menu, '绘制三维幅度谱',
+                                             self.plot3dMagnitudeSpectrum)
 
         self.plot_spectrum_menu.addSeparator()
 
         # 绘图-谱-角度谱
-        self.plot_ang_spectrum_action = createAction('角度谱', self.plot_spectrum_menu, '绘制角度谱', self.plotAngleSpectrum)
+        self.plot_ang_spectrum_action = Action('角度谱', self.plot_spectrum_menu, '绘制角度谱', self.plotAngleSpectrum)
 
         # 绘图-谱-角度谱色块图
-        self.plot_2d_ang_spectrum_action = createAction('角度谱色块图', self.plot_spectrum_menu, '绘制角度谱色块图',
-                                                        self.plot2dAngleSpectrum)
+        self.plot_2d_ang_spectrum_action = Action('角度谱色块图', self.plot_spectrum_menu, '绘制角度谱色块图',
+                                                  self.plot2dAngleSpectrum)
 
         # 绘图-谱-三维角度谱
-        self.plot_3d_ang_spectrum_action = createAction('三维角度谱', self.plot_spectrum_menu, '绘制三维角度谱',
-                                                        self.plot3dAngleSpectrum)
+        self.plot_3d_ang_spectrum_action = Action('三维角度谱', self.plot_spectrum_menu, '绘制三维角度谱',
+                                                  self.plot3dAngleSpectrum)
 
         # 绘图-加窗设置
-        self.window_options_action = createAction('加窗设置', self.plot_menu, '设置加窗参数', self.windowOptionsDialog)
+        self.window_options_action = Action('加窗设置', self.plot_menu, '设置加窗参数', self.windowOptionsDialog)
 
         # 滤波
-        self.filter_menu = createMenu('滤波', self.menu_bar, enabled=False)
+        self.filter_menu = Menu('滤波', self.menu_bar, enabled=False)
 
         # 滤波-更新数据
-        self.update_data_action = createAction('更新数据（否）', self.filter_menu, '如果为是，每次滤波后数据会更新',
-                                               self.updateFilteredData)
+        self.update_data_action = Action('更新数据（否）', self.filter_menu, '如果为是，每次滤波后数据会更新',
+                                         self.updateFilteredData)
 
         self.filter_menu.addSeparator()
 
-        # 滤波-去趋势
-        self.detrend_menu = createMenu('去趋势', self.filter_menu, status_tip='去除数据中的趋势')
-
-        # 滤波-去趋势-线性
-        self.detrend_linear_action = createAction('线性', self.detrend_menu, '去除数据线性趋势',
-                                                  lambda: self.detrendData('linear'))
-
-        # 滤波-去趋势-常数
-        self.detrend_constant_action = createAction('常数', self.detrend_menu, '去除数据均值',
-                                                    lambda: self.detrendData('constant'))
-
         # 滤波-EMD
-        self.emd_menu = createMenu('EMD', self.filter_menu, status_tip='使用EMD及衍生方式滤波')
+        self.emd_menu = Menu('EMD', self.filter_menu, status_tip='使用EMD及衍生方式滤波')
 
         # 滤波-EMD-EMD, EEMD and CEEMDAN
         emd_method_list = ['EMD', 'EEMD', 'CEEMDAN']
         for i in emd_method_list:
-            _ = createAction(i, self.emd_menu, f'使用{i}进行数据分解与重构', self.plotEMD)
+            _ = Action(i, self.emd_menu, f'使用{i}进行数据分解与重构', self.plotEMD)
 
         self.emd_menu.addSeparator()
 
         # 滤波-EMD-绘制瞬时频率
-        self.emd_plot_ins_fre_action = createAction('绘制瞬时频率', self.emd_menu, '绘制重构IMF的瞬时频率',
-                                                    self.plotEMDInstantaneousFrequency)
+        self.emd_plot_ins_fre_action = Action('绘制瞬时频率', self.emd_menu, '绘制重构IMF的瞬时频率',
+                                              self.plotEMDInstantaneousFrequency)
         self.emd_plot_ins_fre_action.setEnabled(False)
 
         self.emd_menu.addSeparator()
 
         # 滤波-EMD-设置
-        self.emd_options_action = createAction('设置', self.emd_menu, 'EMD相关设置', self.EMDOptionsDialog)
+        self.emd_options_action = Action('设置', self.emd_menu, 'EMD相关设置', self.EMDOptionsDialog)
 
         # 滤波-IIR滤波器
-        self.iir_menu = createMenu('IIR滤波器', self.filter_menu)
+        self.iir_menu = Menu('IIR滤波器', self.filter_menu)
 
         # 滤波-IIR滤波器-Butterworth等
         cal_filter_types = ['Butterworth', 'Chebyshev type I', 'Chebyshev type II', 'Elliptic (Cauer)']
         for i in cal_filter_types:
-            _ = createAction(i, self.iir_menu, f'设计{i}滤波器', self.iirCalculateFilterParams)
+            _ = Action(i, self.iir_menu, f'设计{i}滤波器', self.iirCalculateFilterParams)
 
         self.iir_menu.addSeparator()
 
         # 滤波-IIR滤波器-Bessel/Thomson
-        self.iir_bessel_action = createAction('Bessel/Thomson', self.iir_menu, '设计Bessel/Thomson滤波器',
-                                              self.iirDesignBesselFilter)
+        self.iir_bessel_action = Action('Bessel/Thomson', self.iir_menu, '设计Bessel/Thomson滤波器',
+                                        self.iirDesignBesselFilter)
 
         self.iir_menu.addSeparator()
 
@@ -942,59 +265,26 @@ class MainWindow(QMainWindow):
         comb_filter_types = ['Notch Digital Filter', 'Peak (Resonant) Digital Filter',
                              'Notching or Peaking Digital Comb Filter']
         for i in comb_filter_types:
-            _ = createAction(i, self.iir_menu, f'设计{i}滤波器', self.iirDesignCombFilter)
+            _ = Action(i, self.iir_menu, f'设计{i}滤波器', self.iirDesignCombFilter)
 
         # 滤波-小波
-        self.wavelet_menu = createMenu('小波', self.filter_menu)
+        self.wavelet_menu = Menu('小波', self.filter_menu)
 
         # 滤波-小波-离散小波变换
-        self.wavelet_dwt_action = createAction('离散小波变换', self.wavelet_menu, '使用离散小波变换进行数据分解与重构或去噪',
-                                               self.waveletDWTDialog)
+        self.wavelet_dwt_action = Action('离散小波变换', self.wavelet_menu, '使用离散小波变换进行数据分解与重构或去噪',
+                                         self.waveletDWTDialog)
 
         # 滤波-小波-小波去噪
-        self.wavelet_threshold_action = createAction('小波去噪', self.wavelet_menu, '小波去噪', self.waveletThresholdDialog)
+        self.wavelet_threshold_action = Action('小波去噪', self.wavelet_menu, '小波去噪', self.waveletThresholdDialog)
 
         self.wavelet_menu.addSeparator()
 
         # 滤波-小波-小波包
-        self.wavelet_threshold_action = createAction('小波包', self.wavelet_menu, '使用小波包进行数据分解并从选择的节点重构',
-                                                     self.waveletPacketsDialog)
-
-    def initTabWidget(self):
-        """初始化绘图区"""
-
-        # 绘制灰度图
-        self.plot_gray_scale_widget = MyPlotWidget('灰度图', '时间（s）', '通道', check_mouse=False)
-        self.plot_gray_scale_widget.setXRange(0, 5)
-        self.plot_gray_scale_widget.setYRange(0, 200)
-
-        # 绘制单通道相位差-时间图
-        self.plot_single_channel_time_widget = MyPlotWidget('相位差图', '时间（s）', '相位差（rad）', grid=True)
-        self.plot_single_channel_time_widget.setXRange(0, 5)
-
-        # 绘制频谱图
-        self.plot_amplitude_frequency_widget = MyPlotWidget('幅值图', '频率（Hz）', '幅值', grid=True)
-        self.plot_amplitude_frequency_widget.setXRange(0, 500)
-
-        combine_image_widget = QWidget()
-        image_vbox = QVBoxLayout()
-        image_vbox.addWidget(self.plot_single_channel_time_widget)
-        image_vbox.addWidget(self.plot_amplitude_frequency_widget)
-        combine_image_widget.setLayout(image_vbox)
-
-        self.tab_widget = QTabWidget()
-        self.tab_widget.setMovable(True)  # 设置tab可移动
-        self.tab_widget.setStyleSheet('font-size: 15px; font-family: "Times New Roman", "Microsoft YaHei";')
-        self.tab_widget.setTabsClosable(True)  # 设置tab可关闭
-        self.tab_widget.tabCloseRequested[int].connect(self.removeTab)
-        self.tab_widget.addTab(self.plot_gray_scale_widget, '灰度图')
-        self.tab_widget.addTab(combine_image_widget, '单通道')
-        self.tab_widget.tabBar().setTabButton(0, QTabBar.RightSide, None)
-        self.tab_widget.tabBar().setTabButton(1, QTabBar.RightSide, None)  # 设置删除按钮消失
+        self.wavelet_threshold_action = Action('小波包', self.wavelet_menu, '使用小波包进行数据分解并从选择的节点重构',
+                                               self.waveletPacketsDialog)
 
     def initLayout(self):
         """初始化主窗口布局"""
-
         # 设置主窗口layout
         main_window_widget = QWidget()
         main_window_vbox = QVBoxLayout()
@@ -1009,7 +299,7 @@ class MainWindow(QMainWindow):
         self.file_path_line_edit.setFocusPolicy(Qt.NoFocus)
 
         change_file_path_button = PushButton('')
-        setPicture(file_path_jpg, 'file_path.jpg', change_file_path_button)
+        self.setPicture(file_path_jpg, 'file_path.jpg', change_file_path_button)
         change_file_path_button.clicked.connect(self.changeFilePath)
 
         file_table_scrollbar = QScrollBar(Qt.Vertical)
@@ -1050,20 +340,20 @@ class MainWindow(QMainWindow):
         self.channel_number_spinbx = SpinBox()
         self.channel_number_spinbx.setValue(1)
         self.channel_number_spinbx.setMinimumWidth(100)
-        self.channel_number_spinbx.textChanged.connect(self.changeChannelNumber)
-        self.channel_number_spinbx.textChanged.connect(self.plotSingleChannelTime)
-        self.channel_number_spinbx.textChanged.connect(self.plotAmplitudeFrequency)
+        self.channel_number_spinbx.valueChanged.connect(self.changeChannelNumber)
+        self.channel_number_spinbx.valueChanged.connect(self.plotSingleChannelTime)
+        self.channel_number_spinbx.valueChanged.connect(self.plotAmplitudeFrequency)
 
         # 播放音频按钮
         self.playBtn = PushButton('')
-        setPicture(play_jpg, 'play.jpg', self.playBtn)
+        self.setPicture(play_jpg, 'play.jpg', self.playBtn)
         self.playBtn.clicked.connect(self.createWavFile)
         self.playBtn.clicked.connect(self.createPlayer)
         self.playBtn.clicked.connect(self.playBtnChangeState)
 
         # 停止音频播放按钮
         self.stopBtn = PushButton('')
-        setPicture(stop_jpg, 'stop.jpg', self.stopBtn)
+        self.setPicture(stop_jpg, 'stop.jpg', self.stopBtn)
         self.stopBtn.clicked.connect(self.resetPlayer)
 
         self.playBtn.setDisabled(True)
@@ -1086,6 +376,31 @@ class MainWindow(QMainWindow):
         data_params_hbox.addSpacing(5)
         data_params_hbox.addWidget(number_of_channels_label)
         data_params_hbox.addWidget(self.current_channels_line_edit)
+
+        # 绘制灰度图
+        self.plot_gray_scale_widget = MyPlotWidget('灰度图', '时间（s）', '通道', check_mouse=False)
+
+        # 绘制单通道相位差-时间图
+        self.plot_single_channel_time_widget = MyPlotWidget('相位差图', '时间（s）', '相位差（rad）', grid=True)
+
+        # 绘制频谱图
+        self.plot_amplitude_frequency_widget = MyPlotWidget('幅值图', '频率（Hz）', '幅值', grid=True)
+
+        combine_image_widget = QWidget()
+        image_vbox = QVBoxLayout()
+        image_vbox.addWidget(self.plot_single_channel_time_widget)
+        image_vbox.addWidget(self.plot_amplitude_frequency_widget)
+        combine_image_widget.setLayout(image_vbox)
+
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setMovable(True)  # 设置tab可移动
+        self.tab_widget.setStyleSheet('font-size: 15px; font-family: "Times New Roman", "Microsoft YaHei";')
+        self.tab_widget.setTabsClosable(True)  # 设置tab可关闭
+        self.tab_widget.tabCloseRequested[int].connect(self.removeTab)
+        self.tab_widget.addTab(self.plot_gray_scale_widget, '灰度图')
+        self.tab_widget.addTab(combine_image_widget, '单通道')
+        self.tab_widget.tabBar().setTabButton(0, QTabBar.RightSide, None)
+        self.tab_widget.tabBar().setTabButton(1, QTabBar.RightSide, None)  # 设置删除按钮消失
 
         # GPS时间组件
         gps_from_label = Label('始')
@@ -1124,14 +439,13 @@ class MainWindow(QMainWindow):
 
     def initLocalParams(self):
         """初始化局部参数，即适用于单个文件，重新选择文件后更新"""
-
         # 默认错误为None
         self.err = None  # 捕捉到的错误
 
         # 播放器默认状态
         if hasattr(self, 'player'):
             self.player.stop()
-        setPicture(play_jpg, 'play.jpg', self.playBtn)
+        self.setPicture(play_jpg, 'play.jpg', self.playBtn)
         self.playBtn.setDisabled(False)
         self.stopBtn.setDisabled(False)  # 设置播放按钮
         self.playerState = False  # 播放器否在播放
@@ -1158,7 +472,7 @@ class MainWindow(QMainWindow):
         # 二值图
         self.binary_image_flag = True  # 是否使用简单阈值
         self.binary_image_threshold = 120.0  # 阈值
-        self.binary_image_threshold_methods = {'双峰法': twoPeaks, '大津法': OSTU}  # 两种计算方法，双峰法及大津法
+        self.binary_image_threshold_methods = {'双峰法': self.twoPeaks, '大津法': self.OSTU}  # 两种计算方法，双峰法及大津法
         self.binary_image_threshold_method_index = 0  # 计算阈值方法的索引
 
         # 加窗
@@ -1215,19 +529,17 @@ class MainWindow(QMainWindow):
         self.wavelet_packets_padding_mode_index = 0  # 数据填充模式索引
 
     # """------------------------------------------------------------------------------------------------------------"""
-    """一些特殊函数"""
+    """继承mainwindow自带函数"""
 
-    def closeEvent(self, event):
-        """退出时的提示"""
-
-        reply = QMessageBox.question(self, '提示', '是否退出？', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-
-        # 判断返回值，如果点击的是Yes按钮，我们就关闭组件和应用，否则就忽略关闭事件
-        event.accept() if reply == QMessageBox.Yes else event.ignore()
+    # def closeEvent(self, event):
+    #     """退出时的提示"""
+    #     reply = QMessageBox.question(self, '提示', '是否退出？', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+    #
+    #     # 判断返回值，如果点击的是Yes按钮，我们就关闭组件和应用，否则就忽略关闭事件
+    #     event.accept() if reply == QMessageBox.Yes else event.ignore()
 
     def removeTab(self, index):
         """关闭对应选项卡"""
-
         self.tab_widget.removeTab(index)
 
     # """------------------------------------------------------------------------------------------------------------"""
@@ -1235,19 +547,17 @@ class MainWindow(QMainWindow):
 
     def playBtnChangeState(self):
         """点击播放按钮改变文字和播放器状态"""
-
         if not self.playerState:
-            setPicture(pause_jpg, 'pause.jpg', self.playBtn)
+            self.setPicture(pause_jpg, 'pause.jpg', self.playBtn)
             self.player.play()
             self.playerState = True
         else:
-            setPicture(play_jpg, 'play.jpg', self.playBtn)
+            self.setPicture(play_jpg, 'play.jpg', self.playBtn)
             self.player.pause()
             self.playerState = False
 
     def createWavFile(self):
         """创建当前数据的wav文件，储存在当前文件夹路径下"""
-
         if not self.hasWavFile:
             data = np.array(self.data[self.channel_number - 1])  # 不转array会在重复转换数据类型时发生数据类型错误
             soundfile.write(os.path.join(self.file_path, 'temp.wav'), data, self.sampling_rate)
@@ -1255,7 +565,6 @@ class MainWindow(QMainWindow):
 
     def createPlayer(self):
         """创建播放器并赋数据"""
-
         if not self.playerHasMedia:
             self.player = QtMultimedia.QMediaPlayer()
             self.player.stateChanged.connect(self.playerStateChanged)
@@ -1265,47 +574,39 @@ class MainWindow(QMainWindow):
 
     def playerStateChanged(self, state):
         """播放器停止后删除文件"""
-
         if state == QtMultimedia.QMediaPlayer.StoppedState:
             self.resetPlayer()
             os.remove(os.path.join(self.file_path, 'temp.wav'))  # 在播放完成或点击Abort后删除临时文件
 
     def resetPlayer(self):
         """重置播放器"""
-
         self.player.stop()
-        setPicture(play_jpg, 'play.jpg', self.playBtn)
+        self.setPicture(play_jpg, 'play.jpg', self.playBtn)
         self.playerState = False
         self.hasWavFile = False
         self.playerHasMedia = False
 
     # """------------------------------------------------------------------------------------------------------------"""
-    """绘制三个固有图的函数"""
+    """主绘图区"""
 
     def plotSingleChannelTime(self):
         """绘制单通道相位差-时间图"""
-
-        data = self.data[self.channel_number - 1]
-
         self.plot_single_channel_time_widget.plot_item.clear()
-        self.plot_single_channel_time_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
-                                                       self.sampling_times_to_num / self.sampling_rate)
-        x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
-                        self.current_sampling_times) / self.sampling_rate
-        self.plot_single_channel_time_widget.setTitle('<font face="Microsoft YaHei" size="5">相位差图</font>')
-        self.plot_single_channel_time_widget.setLabel('left', '<font face="Microsoft YaHei">相位差（rad）</font>')
+
+        x = self.xaxis()
+        data = self.data[self.channel_number - 1]
         self.plot_single_channel_time_widget.draw(x, data, pen=QColor('blue'))
 
     def plotAmplitudeFrequency(self):
         """绘制幅值-频率图"""
 
-        data = self.data[self.channel_number - 1]
-
-        data = toAmplitude(data, self.current_sampling_times)[:self.current_sampling_times // 2]
-        x = np.fft.fftfreq(self.current_sampling_times, 1 / self.sampling_rate)[:self.current_sampling_times // 2]
         self.plot_amplitude_frequency_widget.plot_item.clear()
-        self.plot_amplitude_frequency_widget.setXRange(0, self.sampling_rate / 2)
-        self.plot_amplitude_frequency_widget.draw(x, data, pen=QColor('blue'))  # 只要半谱
+
+        data = self.data[self.channel_number - 1]
+        data = self.toAmplitude(data)
+        x = self.xaxis(freq=True)
+
+        self.plot_amplitude_frequency_widget.draw(x, data, pen=QColor('blue'))
 
     # """------------------------------------------------------------------------------------------------------------"""
     """文件路径区和文件列表调用函数"""
@@ -1403,11 +704,234 @@ class MainWindow(QMainWindow):
         self.updateImages()
 
     # """------------------------------------------------------------------------------------------------------------"""
+    """功能函数"""
+
+    @staticmethod
+    def getPicture(pic_code, pic_name):
+        """创建图片"""
+        image = open(pic_name, 'wb')
+        image.write(base64.b64decode(pic_code))
+        image.close()
+
+    def setPicture(self, picture, picture_name, widget, window_icon=False):
+        """设置图片"""
+        self.getPicture(picture, picture_name)  # 从image.py中获取图片信息生成图片
+        if window_icon:
+            self.setWindowIcon(QIcon(picture_name))
+        else:
+            widget.setIcon(QIcon(picture_name))  # 加载图片
+            widget.setStyleSheet('background: white')
+        os.remove(picture_name)  # 移除图片释放内存
+
+    @staticmethod
+    def printError(err):
+        """将捕获的错误输出"""
+        QMessageBox.warning(None, '错误', f'<font face="Times New Roman" size="4">{err}</font>!', QMessageBox.Ok)
+
+    def xaxis(self, begin=None, end=None, num=None, freq=False):
+        """生成绘制时域图的x轴"""
+        if not num:
+            num = self.current_sampling_times
+
+        if not freq:
+            if not begin:
+                begin = self.sampling_times_from_num
+            if not end:
+                end = self.sampling_times_to_num
+            return np.linspace(begin, end, num) / self.sampling_rate
+        else:
+            return np.fft.fftfreq(num, 1 / self.sampling_rate)[:num // 2]
+
+    def toAmplitude(self, data, num=None):
+        """fft后数据处理作幅值图"""
+        if not num:
+            num = self.current_sampling_times
+        data = np.abs(np.fft.fft(data)) * 2.0 / num
+        return data[:num // 2]
+
+    @staticmethod
+    def normalizeToGrayScale(data):
+        """数据标准化至0-255"""
+        normalized_data = (data - np.min(data)) / (np.max(data) - np.min(data))
+        normalized_data *= 255
+        return normalized_data
+
+    @staticmethod
+    def twoPeaks(data):
+        """双峰法求阈值"""
+        rows, cols = data.shape
+
+        # 存储灰度直方图
+        gray_scale_hist = np.zeros([256], np.uint64)
+        for i in range(rows):
+            for j in range(cols):
+                gray_scale_hist[round(data[i][j])] += 1
+
+        # 寻找灰度直方图的最大峰值对应的灰度值
+        max_gray_scale_location = np.where(gray_scale_hist == np.max(gray_scale_hist))
+        first_peak = max_gray_scale_location[0][0]  # 灰度值
+        # 寻找灰度直方图的第二个峰值对应的灰度值
+        distance = np.zeros([256], np.float32)
+        for i in range(256):
+            distance[i] = pow(i - first_peak, 2) * gray_scale_hist[i]  # 综合考虑 两峰距离与峰值
+        max_gray_scale_location2 = np.where(distance == np.max(distance))
+        second_peak = max_gray_scale_location2[0][0]
+
+        # 找到两个峰值之间的最小值对应的灰度值，作为阈值
+        if first_peak > second_peak:  # 第一个峰值再第二个峰值的右侧
+            temp_val = gray_scale_hist[int(second_peak):int(first_peak)]
+            min_gray_scale_location = np.where(temp_val == np.min(temp_val))
+            threshold = second_peak + min_gray_scale_location[0][0] + 1
+        else:  # 第一个峰值再第二个峰值的左侧
+            temp_val = gray_scale_hist[int(first_peak):int(second_peak)]
+            min_gray_scale_location = np.where(temp_val == np.min(temp_val))
+            threshold = first_peak + min_gray_scale_location[0][0] + 1
+        return threshold
+
+    @staticmethod
+    def OSTU(data):
+        """OSTU（大津）法"""
+        height, width = data.shape
+        max_gray_scale = 0
+        threshold = 0
+        # 遍历每一个灰度层
+        for i in range(255):
+            # 使用numpy直接对数组进行计算
+            smaller_px = data[np.where(data < i)]
+            bigger_px = data[np.where(data >= i)]
+            smaller_ratio = len(smaller_px) / (height * width)
+            bigger_ratio = len(bigger_px) / (height * width)
+            average_gray_scale_smaller = np.mean(smaller_px) if len(smaller_px) > 0 else 0
+            average_gray_scale_bigger = np.mean(bigger_px) if len(bigger_px) > 0 else 0
+            otsu = smaller_ratio * bigger_ratio * (average_gray_scale_smaller - average_gray_scale_bigger) ** 2
+            if otsu > max_gray_scale:
+                max_gray_scale = otsu
+                threshold = i
+        return threshold
+
+    def filterData(self):
+        """去除信号的均值和线性趋势"""
+        detrend(self.data, axis=1, type='constant', overwrite_data=True)
+        detrend(self.data, axis=1, type='linear', overwrite_data=True)
+
+    def initTwoPlotWidgets(self, data, title):
+        """创建返回结合两个pw的Qwidget"""
+        x = self.xaxis()
+        data_widget = MyPlotWidget(f'{title}', '时间（s）', '相位差（rad）', grid=True)
+        data_widget.draw(x, data, pen=QColor('blue'))
+
+        data = self.toAmplitude(data)
+        x = self.xaxis(freq=True)
+        fre_amp_widget = MyPlotWidget('幅值图', '频率（Hz）', '幅值', grid=True)
+        fre_amp_widget.draw(x, data, pen=QColor('blue'))
+
+        combine_widget = QWidget()
+        vbox = QVBoxLayout()
+        vbox.addWidget(data_widget)
+        vbox.addWidget(fre_amp_widget)
+        combine_widget.setLayout(vbox)
+        return combine_widget
+
+    def initFalseColorWidget(self, data, plot_widget, type=None):
+        """初始化伪颜色图widget"""
+        if type == 'gray':
+            plot_widget.clear()
+
+        tr = QTransform()
+        tr.scale(1 / self.sampling_rate, 1)  # 缩放
+        tr.translate(self.sampling_times_from_num, 0)  # 移动
+
+        item = pg.ImageItem()
+        if type == 'heatmap':
+            item.setColorMap('viridis')
+        item.setImage(data.T)
+        item.setTransform(tr)
+        plot_widget.addItem(item)
+
+    def plotFalseColorImage(self, type='gray'):
+        """绘制伪颜色图"""
+        if type == 'gray':
+            self.initFalseColorWidget(self.data, self.plot_gray_scale_widget, type='gray')
+
+        elif type == 'binary':
+            plot_widget = MyPlotWidget('二值图', '时间（s）', '通道', check_mouse=False)
+            self.tab_widget.addTab(plot_widget, f'二值图 - 阈值={self.binary_image_threshold}')
+            # 阈值化
+            data = self.normalizeToGrayScale(self.data)
+            data[data >= self.binary_image_threshold] = 255
+            data[data < self.binary_image_threshold] = 0  # 根据阈值赋值
+            self.initFalseColorWidget(data, plot_widget)
+
+        elif type == 'heatmap':
+            plot_widget = MyPlotWidget('热力图', '时间（s）', '通道', check_mouse=False)
+            self.tab_widget.addTab(plot_widget, '热力图')
+            self.initFalseColorWidget(self.data, plot_widget, type='heatmap')
+
+    @staticmethod
+    def calculateTimeDomainFeatures(data):
+        """计算时域特征"""
+        rows, cols = data.shape
+
+        # 有量纲统计量
+        max_value = np.amax(data, axis=1)  # 最大值
+        peak_value = np.amax(np.abs(data), axis=1)  # 最大绝对值
+        min_value = np.amin(data, axis=1)  # 最小值
+        mean = np.mean(data, axis=1)  # 均值
+        peak_peak_value = max_value - min_value  # 峰峰值
+        mean_absolute_value = np.mean(np.abs(data), axis=1)  # 绝对平均值
+        root_mean_square = np.sqrt(np.sum(data ** 2, axis=1) / cols)  # 均方根值
+        square_root_amplitude = (np.sum(np.sqrt(np.abs(data)), axis=1) / cols) ** 2  # 方根幅值
+        variance = np.var(data, axis=1)  # 方差
+        standard_deviation = np.std(data, axis=1)  # 标准差
+        kurtosis = stats.kurtosis(data, axis=1, fisher=False)  # 峭度
+        skewness = stats.skew(data, axis=1)  # 偏度
+        # 无量纲统计量
+        clearance_factor = peak_value / square_root_amplitude  # 裕度指标
+        shape_factor = root_mean_square / mean_absolute_value  # 波形指标
+        impulse_factor = peak_value / mean_absolute_value  # 脉冲指标
+        crest_factor = peak_value / root_mean_square  # 峰值指标
+        kurtosis_factor = kurtosis / (root_mean_square ** 4)  # 峭度指标
+
+        features = {'最大值': max_value, '峰值': peak_value, '最小值': min_value, '平均值': mean, '峰峰值': peak_peak_value,
+                    '绝对平均值': mean_absolute_value, '均方根值': root_mean_square, '方根幅值': square_root_amplitude,
+                    '方差': variance, '标准差': standard_deviation, '峭度': kurtosis, '偏度': skewness,
+                    '裕度因子': clearance_factor, '波形因子': shape_factor, '脉冲因子': impulse_factor, '峰值因子': crest_factor,
+                    '峭度因子': kurtosis_factor}
+        return features
+
+    @staticmethod
+    def calculateFrequencyDomainFeatures(data, sampling_rate):
+        """计算频域特征"""
+        data_fft = np.fft.fft(data, axis=1)
+        channel_num, data_length = data_fft.shape  # 样本个数和信号长度
+
+        # 傅里叶变换是对称的，只需取前半部分数据，否则由于频率序列是正负对称的，会导致计算重心频率求和时正负抵消
+        magnitude = np.abs(data_fft)[:, :data_length // 2]  # 信号幅值
+        frequency = np.fft.fftfreq(data_length, 1 / sampling_rate)[:data_length // 2]
+
+        power_spectrum = magnitude ** 2 / data_length  # 功率谱
+
+        centroid_frequency = np.sum(frequency * power_spectrum, axis=1) / np.sum(power_spectrum, axis=1)  # 重心频率
+        mean_frequency = np.mean(power_spectrum, axis=1)  # 平均频率
+        mean_square_frequency = np.sum(power_spectrum * np.square(frequency), axis=1) / np.sum(power_spectrum,
+                                                                                               axis=1)  # 均方频率
+        root_mean_square_frequency = np.sqrt(mean_square_frequency)  # 均方根频率
+
+        freq_tile = np.tile(frequency.reshape(1, -1), (channel_num, 1))  # 复制 channel_num 行
+        fc_tile = np.tile(centroid_frequency.reshape(-1, 1), (1, freq_tile.shape[1]))  # 复制列，与freq_tile的列数对应
+        frequency_variance = np.sum(np.square(freq_tile - fc_tile) * power_spectrum, axis=1) / np.sum(power_spectrum,
+                                                                                                      axis=1)  # 频率方差
+        frequency_standard_deviation = np.sqrt(frequency_variance)  # 频率标准差
+
+        features = {'重心频率': centroid_frequency, '平均频率': mean_frequency, '均方根频率': root_mean_square_frequency,
+                    '均方频率': mean_square_frequency, '频率方差': frequency_variance, '频率标准差': frequency_standard_deviation}
+        return features
+
+    # """------------------------------------------------------------------------------------------------------------"""
     """文件-导入菜单调用函数"""
 
     def importData(self):
         """导入（多个）数据文件后更新参数和绘图等"""
-
         file_names = QFileDialog.getOpenFileNames(self, '导入', '', 'DAS data (*.dat)')[0]  # 打开多个.dat文件
         if file_names != []:
             self.file_names = file_names
@@ -1419,7 +943,6 @@ class MainWindow(QMainWindow):
 
     def readData(self):
         """读取数据，更新参数"""
-
         time, data = [], []
         for file in self.file_names:
             raw_data = np.fromfile(os.path.join(self.file_path, file), dtype='<f4')  # <低位在前高位在后（小端模式），f4：32位（单精度）浮点类型
@@ -1429,11 +952,9 @@ class MainWindow(QMainWindow):
             time.append(raw_data[:6])  # GPS时间
             data.append(raw_data[10:].reshape(self.current_channels, self.single_sampling_times))
 
-        # 初始化数据相关参数
         self.time = time
         self.data = np.concatenate(data, axis=1)  # （通道数，采样次数）
-        for i in range(len(data)):
-            self.data[i] -= np.mean(self.data[i])  # 去除直流分量
+        self.filterData()
         self.sampling_times = self.single_sampling_times * len(self.file_names)
         self.origin_data = self.data
 
@@ -1442,7 +963,6 @@ class MainWindow(QMainWindow):
 
     def exportData(self):
         """导出数据"""
-
         fpath, ftype = QFileDialog.getSaveFileName(self, '导出', '', 'csv(*.csv);;json(*.json);;pickle(*.pickle);;'
                                                                    'txt(*.txt);;xls(*.xls *.xlsx)')
 
@@ -1464,7 +984,6 @@ class MainWindow(QMainWindow):
 
     def calculateSNRDialog(self):
         """计算信噪比对话框"""
-
         self.dialog = QDialog()
         self.dialog.setMaximumWidth(500)
         self.dialog.setWindowTitle('计算信噪比')
@@ -1541,7 +1060,6 @@ class MainWindow(QMainWindow):
 
     def updateCalculateSNRParams(self):
         """更新参数"""
-
         self.signal_channel_number = int(self.signal_channel_number_line_edit.text())
 
         self.noise_channel_number = int(self.noise_channel_number_line_edit.text())
@@ -1556,7 +1074,6 @@ class MainWindow(QMainWindow):
 
     def calculateSNR(self):
         """计算信噪比"""
-
         try:
             signal_data = self.data[self.signal_channel_number,
                           self.signal_start_sampling_time:self.signal_stop_sampling_time + 1]
@@ -1565,16 +1082,14 @@ class MainWindow(QMainWindow):
 
             snr = round(10.0 * np.log10(np.sum(signal_data ** 2) / np.sum(noise_data ** 2)), 5)
             self.snr_line_edit.setText(str(snr))
-
         except Exception as err:
-            printError(err)
+            self.printError(err)
 
     # """------------------------------------------------------------------------------------------------------------"""
     """操作-查看数据（时间）调用函数"""
 
     def setTimeRangeDialog(self):
         """调用按时间查看数据范围的对话框"""
-
         dialog = QDialog()
         dialog.setWindowTitle('查看数据（时间）')
 
@@ -1606,7 +1121,6 @@ class MainWindow(QMainWindow):
 
     def setTimeRange(self):
         """根据设置时间截取数据"""
-
         from_num = int(float(self.time_range_from_line_edit.text()) * self.sampling_rate)
         to_num = int(float(self.time_range_to_line_edit.text()) * self.sampling_rate)
 
@@ -1624,16 +1138,14 @@ class MainWindow(QMainWindow):
         try:
             self.data = self.origin_data[self.channel_from_num - 1:self.channel_to_num,
                         self.sampling_times_from_num - 1:self.sampling_times_to_num]
-
         except Exception as err:
-            printError(err)
+            self.printError(err)
 
     # """------------------------------------------------------------------------------------------------------------"""
     """查看数据（通道）调用函数"""
 
     def setChannelRangeDialog(self):
         """按通道截取数据的对话框"""
-
         dialog = QDialog()
         dialog.setWindowTitle('查看数据（通道）')
 
@@ -1666,7 +1178,6 @@ class MainWindow(QMainWindow):
 
     def setChannelRange(self):
         """以通道数截取"""
-
         from_num, to_num = int(self.channel_from.text()), int(self.channel_to.text())
 
         if 1 <= from_num < self.origin_data.shape[0] and 1 < to_num <= self.origin_data.shape[0]:
@@ -1683,16 +1194,14 @@ class MainWindow(QMainWindow):
         try:
             self.data = self.origin_data[self.channel_from_num - 1:self.channel_to_num,
                         self.sampling_times_from_num - 1:self.sampling_times_to_num]
-
         except Exception as err:
-            printError(err)
+            self.printError(err)
 
     # """------------------------------------------------------------------------------------------------------------"""
     """更改读取通道号步长、读取文件数调用的函数"""
 
     def changeChannelNumberStep(self):
         """改变通道号的步长"""
-
         dialog = QDialog()
         dialog.setWindowTitle('设置通道切换步长')
 
@@ -1718,14 +1227,12 @@ class MainWindow(QMainWindow):
 
     def updateChannelNumberStep(self):
         """更新读取通道号的步长"""
-
         self.channel_number_step = int(self.channel_number_step_line_edit.text())
 
         self.channel_number_spinbx.setSingleStep(self.channel_number_step)
 
     def changeFilesReadNumberDialog(self):
         """从表格选择文件时读取的文件数"""
-
         dialog = QDialog()
         dialog.setWindowTitle('设置文件读取数量')
 
@@ -1751,7 +1258,6 @@ class MainWindow(QMainWindow):
 
     def updateFilesReadNumber(self):
         """更新读取文件数量"""
-
         self.files_read_number = int(self.files_read_number_line_edit.text())
 
     # """------------------------------------------------------------------------------------------------------------"""
@@ -1759,7 +1265,6 @@ class MainWindow(QMainWindow):
 
     def binaryImageDialog(self):
         """二值图设置组件"""
-
         dialog = QDialog()
         dialog.setWindowTitle('二值图')
 
@@ -1803,7 +1308,6 @@ class MainWindow(QMainWindow):
 
     def updateBinaryImageParams(self):
         """检查选择那种求阈值方法"""
-
         self.binary_image_flag = self.binary_image_input_radiobtn.isChecked()
 
         if self.binary_image_flag:
@@ -1813,91 +1317,42 @@ class MainWindow(QMainWindow):
             elif threshold < 0:
                 threshold = 0
         else:
-            threshold = self.binary_image_threshold_methods[self.binary_image_method_combx.currentText()](self.data)
+            data = self.normalizeToGrayScale(self.data)
+            threshold = self.binary_image_threshold_methods[self.binary_image_method_combx.currentText()](data)
 
         self.binary_image_threshold_method_index = self.binary_image_method_combx.currentIndex()
         self.binary_image_threshold = threshold
-
-    def plotFalseColorImage(self, type='gray'):
-        """绘制伪颜色图"""
-
-        if type == 'gray':
-            self.initFalseColorWidget(self.data, self.plot_gray_scale_widget, type='gray')
-
-        elif type == 'binary':
-            plot_widget = MyPlotWidget('二值图', '时间（s）', '通道', check_mouse=False)
-            self.tab_widget.addTab(plot_widget, f'二值图 - 阈值={self.binary_image_threshold}')
-            # 阈值化
-            binary_data = normalizeToGrayScale(self.data)
-            binary_data[binary_data >= self.binary_image_threshold] = 255
-            binary_data[binary_data < self.binary_image_threshold] = 0  # 根据阈值赋值
-            self.initFalseColorWidget(binary_data, plot_widget)
-
-        elif type == 'heatmap':
-            plot_widget = MyPlotWidget('热力图', '时间（s）', '通道', check_mouse=False)
-            self.tab_widget.addTab(plot_widget, '热力图')
-            self.initFalseColorWidget(self.data, plot_widget, type='heatmap')
-
-    def initFalseColorWidget(self, data, plot_widget, type=None):
-        """初始化伪颜色图widget"""
-
-        if type == 'gray':
-            plot_widget.clear()
-
-        plot_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
-                              self.sampling_times_to_num / self.sampling_rate)
-        plot_widget.setYRange(1, self.current_channels)
-
-        tr = QTransform()
-        tr.scale(1 / self.sampling_rate, 1)  # 缩放
-        tr.translate(self.sampling_times_from_num, 0)  # 移动
-
-        item = pg.ImageItem()
-        if type == 'heatmap':
-            item.setColorMap('CET-C2')
-        item.setImage(data.T)
-        item.setTransform(tr)
-        plot_widget.addItem(item)
 
     # """------------------------------------------------------------------------------------------------------------"""
     """计算数据特征调用的函数"""
 
     def plotTimeDomainFeature(self):
         """绘制选中的时域特征图像"""
-
-        features = calculateTimeDomainFeatures(self.data)
+        features = self.calculateTimeDomainFeatures(self.data)
         self.plotFeature(features)
 
     def plotFrequencyDomainFeature(self):
         """绘制选中的频域特征图像"""
-
-        features = calculateFrequencyDomainFeatures(self.data, self.sampling_rate)
+        features = self.calculateFrequencyDomainFeatures(self.data, self.sampling_rate)
         self.plotFeature(features)
 
     def plotFeature(self, features):
         """获取要计算的数据特征名字和值"""
-
         feature_name = self.plot_data_features_menu.sender().text()
         feature = features[feature_name]
 
         plot_widget = MyPlotWidget(feature_name + '图', '通道', '')
-        x = np.linspace(1, self.current_channels, self.current_channels)
-        plot_widget.setXRange(1, self.current_channels)
+        x = self.xaxis(begin=1, end=self.current_channels, num=self.current_channels)
         plot_widget.draw(x, feature, pen=QColor('blue'))
-        self.tab_widget.addTab(plot_widget, f'{feature_name}图 - 窗口类型={self.window_text}')
+        self.tab_widget.addTab(plot_widget, f'{feature_name}图')
 
     # """------------------------------------------------------------------------------------------------------------"""
     """绘制多通道云图调用函数"""
 
     def plotMultiWavesImage(self):
         """绘制多通道云图"""
-
         plot_widget = MyPlotWidget('多通道云图', '时间（s）', '通道', check_mouse=False)
-        plot_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
-                              self.sampling_times_to_num / self.sampling_rate)
-        plot_widget.setYRange(1, self.current_channels)
-        x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
-                        self.current_sampling_times) / self.sampling_rate
+        x = self.xaxis()
         colors = cycle(['red', 'lime', 'deepskyblue', 'yellow', 'plum', 'gold', 'blue', 'fuchsia', 'aqua', 'orange'])
         for i in range(1, self.current_channels + 1):
             plot_widget.draw(x, self.data[i - 1] + i, pen=QColor(next(colors)))  # 根据通道数个位选择颜色绘图
@@ -1908,16 +1363,12 @@ class MainWindow(QMainWindow):
 
     def plotStrain(self):
         """将相位差转为应变率再积分"""
-
         data = self.data[self.channel_number - 1]
-        x_axis = np.linspace(1, self.current_sampling_times, self.current_sampling_times)
-        data = integrate.cumtrapz(data, x_axis, initial=0) * 1e6
+        x = self.xaxis(begin=1, end=self.current_sampling_times, num=self.current_sampling_times)
+        data = integrate.cumtrapz(data, x, initial=0) * 1e6
 
-        x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
-                        self.current_sampling_times) / self.sampling_rate
+        x = self.xaxis()
         plot_widget = MyPlotWidget('应变图', '时间（s）', '应变（με）', grid=True)
-        plot_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
-                              self.sampling_times_to_num / self.sampling_rate)
         plot_widget.draw(x, data, pen=QColor('blue'))
         self.tab_widget.addTab(plot_widget, f'应变图 - 通道号={self.channel_number}')
 
@@ -1926,27 +1377,24 @@ class MainWindow(QMainWindow):
 
     def plotPSD(self):
         """绘制psd图线"""
-
         data = self.data[self.channel_number - 1]
         data = self.window_method(self.current_sampling_times) * data
-        data = np.abs(np.fft.fft(data))
-        data = 20.0 * np.log10(data ** 2 / self.current_sampling_times)[:self.current_sampling_times // 2]  # 转dB单位
+        data = np.abs(np.fft.fft(data)[:self.current_sampling_times // 2])
+        data = 20.0 * np.log10(data ** 2 / self.current_sampling_times)  # 转dB单位
         plot_widget = MyPlotWidget('功率谱密度图', '频率（Hz）', '功率/频率（dB/Hz）', grid=True)
-        x = np.fft.fftfreq(self.current_sampling_times, 1 / self.sampling_rate)[:self.current_sampling_times // 2]
-        plot_widget.setXRange(0, self.sampling_rate / 2)
+        x = self.xaxis(freq=True)
         plot_widget.draw(x, data, pen=QColor('blue'))
         self.tab_widget.addTab(plot_widget, f'功率谱密度图 - 窗口类型={self.window_text}\t'
                                             f'通道号={self.channel_number}')
 
     def plot2dPSD(self):
         """绘制2dpsd谱"""
-
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
         self.tab_widget.addTab(figure_widget, f'功率谱密度色块图 - 窗口类型={self.window_text}\t'
                                               f'通道号={self.channel_number}')
         data = self.data[self.channel_number - 1]
-        ax = plt.axes()
+        ax = plt.gca()
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
@@ -1960,7 +1408,6 @@ class MainWindow(QMainWindow):
 
     def plot3dPSD(self):
         """绘制3dpsd"""
-
         data = self.data[self.channel_number - 1]
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
@@ -1985,28 +1432,25 @@ class MainWindow(QMainWindow):
 
     def plotMagnitudeSpectrum(self):
         """绘制幅度谱"""
-
         data = self.data[self.channel_number - 1]
         data = self.window_method(self.current_sampling_times) * data
-        data = 20.0 * np.log10(np.abs(np.fft.fft(data)) / self.current_sampling_times)[
-                      :self.current_sampling_times // 2]
-
+        data = 20.0 * np.log10(
+            np.abs(np.fft.fft(data)[:self.current_sampling_times // 2]) / self.current_sampling_times)
         plot_widget = MyPlotWidget('幅度谱', '频率（Hz）', '幅度（dB）', grid=True)
-        x = np.fft.fftfreq(self.current_sampling_times, 1 / self.sampling_rate)[:self.current_sampling_times // 2]
+        x = self.xaxis(freq=True)
         plot_widget.draw(x, data, pen=QColor('blue'))
         self.tab_widget.addTab(plot_widget, f'幅度谱 - 窗口类型={self.window_text}\t'
                                             f'通道号={self.channel_number}')
 
     def plot2dMagnitudeSpectrum(self):
         """绘制2d幅度谱"""
-
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
         self.tab_widget.addTab(figure_widget, f'幅度谱色块图 - 窗口类型={self.window_text}\t'
                                               f'通道号={self.channel_number}')
 
         data = self.data[self.channel_number - 1]
-        ax = plt.axes()
+        ax = plt.gca()
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
@@ -2020,7 +1464,6 @@ class MainWindow(QMainWindow):
 
     def plot3dMagnitudeSpectrum(self):
         """绘制3d幅度谱"""
-
         data = self.data[self.channel_number - 1]
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
@@ -2041,27 +1484,25 @@ class MainWindow(QMainWindow):
         plt.xlim(0, self.sampling_rate / 2)
 
     def plotAngleSpectrum(self):
-        """绘制相位谱"""
-
+        """绘制角度谱"""
         data = self.data[self.channel_number - 1]
         data = self.window_method(self.current_sampling_times) * data
-        data = np.angle(np.fft.fft(data))[:self.current_sampling_times // 2]
+        data = np.angle(np.fft.fft(data)[:self.current_sampling_times // 2])
         plot_widget = MyPlotWidget('角度谱', '频率（Hz）', '角度（rad）', grid=True)
-        x = np.fft.fftfreq(self.current_sampling_times, 1 / self.sampling_rate)[:self.current_sampling_times // 2]
+        x = self.xaxis(freq=True)
         plot_widget.draw(x, data, pen=QColor('blue'))
         self.tab_widget.addTab(plot_widget, f'角度谱 - 窗口类型={self.window_text}\t'
                                             f'通道号={self.channel_number}')
 
     def plot2dAngleSpectrum(self):
-        """绘制2d相位谱"""
-
+        """绘制2d角度谱"""
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
         self.tab_widget.addTab(figure_widget, f'角度谱色块图 - 窗口类型={self.window_text}\t'
                                               f'通道号={self.channel_number}')
 
         data = self.data[self.channel_number - 1]
-        ax = plt.axes()
+        ax = plt.gca()
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
@@ -2074,8 +1515,7 @@ class MainWindow(QMainWindow):
         plt.xlim(0, self.current_sampling_times / self.sampling_rate)
 
     def plot3dAngleSpectrum(self):
-        """绘制3d相位谱"""
-
+        """绘制3d角度谱"""
         data = self.data[self.channel_number - 1]
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
@@ -2100,7 +1540,6 @@ class MainWindow(QMainWindow):
 
     def windowOptionsDialog(self):
         """加窗设置调用窗口"""
-
         dialog = QDialog()
         dialog.setWindowTitle('加窗设置')
 
@@ -2148,7 +1587,6 @@ class MainWindow(QMainWindow):
 
     def updateWindowOptionsParams(self):
         """更新加窗设置"""
-
         self.window_text = self.window_method_combx.currentText()
         self.window_method = self.window_methods[self.window_text]
 
@@ -2167,7 +1605,6 @@ class MainWindow(QMainWindow):
 
     def updateFilteredData(self):
         """变更更新数据菜单"""
-
         if self.if_update_data:
             self.update_data_action.setText('更新数据（否）')
             self.if_update_data = False
@@ -2177,62 +1614,16 @@ class MainWindow(QMainWindow):
 
     def ifUpdateData(self, flag, data):
         """判断是否在滤波之后更新数据"""
-
         if flag:
             self.origin_data[self.channel_number - 1] = data
             self.data = self.origin_data
             self.updateImages()
 
     # """------------------------------------------------------------------------------------------------------------"""
-    """建立相位差和频谱图"""
-
-    def initTwoPlotWidgets(self, data, title):
-        """创建返回结合两个pw的Qwidget"""
-
-        x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
-                        self.current_sampling_times) / self.sampling_rate
-        data_widget = MyPlotWidget(f'{title}', '时间（s）', '相位差（rad）', grid=True)
-
-        data_widget.setXRange(self.sampling_times_from_num / self.sampling_rate,
-                              self.sampling_times_to_num / self.sampling_rate)
-        data_widget.draw(x, data, pen=QColor('blue'))
-
-        data = toAmplitude(data, self.current_sampling_times)[:self.current_sampling_times // 2]
-        x = np.fft.fftfreq(self.current_sampling_times, 1 / self.sampling_rate)[:self.current_sampling_times // 2]
-        fre_amp_widget = MyPlotWidget('幅值图', '频率（Hz）', '幅值', grid=True)
-        fre_amp_widget.setXRange(0, self.sampling_rate / 2)
-        fre_amp_widget.draw(x, data, pen=QColor('blue'))
-
-        combine_widget = QWidget()
-        vbox = QVBoxLayout()
-        vbox.addWidget(data_widget)
-        vbox.addWidget(fre_amp_widget)
-        combine_widget.setLayout(vbox)
-
-        return combine_widget
-
-    # """------------------------------------------------------------------------------------------------------------"""
-    """滤波-Detrend调用函数"""
-
-    def detrendData(self, detrend_type):
-        """去趋势"""
-
-        data = self.data[self.channel_number - 1]
-        data = detrend(data, type=detrend_type)
-
-        combine_widget = self.initTwoPlotWidgets(data, '去趋势')
-
-        self.tab_widget.addTab(combine_widget, f'去趋势 - type={detrend_type}\t'
-                                               f'通道号={self.channel_number}')
-
-        self.ifUpdateData(self.if_update_data, data)
-
-    # """------------------------------------------------------------------------------------------------------------"""
     """滤波-EMD调用函数"""
 
     def plotEMD(self):
         """绘制emd分解图和重构图"""
-
         self.emd_method = self.emd_menu.sender().text()
         data = self.data[self.channel_number - 1]
 
@@ -2253,9 +1644,8 @@ class MainWindow(QMainWindow):
                               noise_kind=noise_kind, range_thr=self.ceemdan_range_thr,
                               total_power_thr=self.ceemdan_total_power_thr)
                 self.imfs_res = emd.ceemdan(data, max_imf=self.imfs_res_num - 1)
-
         except Exception as err:
-            printError(err)
+            self.printError(err)
 
         if self.emd_options_flag:
             wgt = QWidget()
@@ -2277,20 +1667,14 @@ class MainWindow(QMainWindow):
                     pw_time = MyPlotWidget('', '', f'IMF{i + 1}（rad）')
                     pw_fre = MyPlotWidget('', '', f'IMF{i + 1}')
 
-                x_time = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
-                                     self.current_sampling_times) / self.sampling_rate
-                pw_time.setXRange(self.sampling_times_from_num / self.sampling_rate,
-                                  self.sampling_times_to_num / self.sampling_rate)
+                x_time = self.xaxis()
                 pw_time.setFixedHeight(150)
                 pw_time.draw(x_time, self.imfs_res[i], pen=QColor('blue'))
                 pw_time_list.append(pw_time)
                 pw_time_list[i].setXLink(pw_time_list[0])  # 设置时域x轴对应
 
-                data = toAmplitude(self.imfs_res[i], self.current_sampling_times)[
-                       :self.current_sampling_times // 2]
-                x_fre = np.fft.fftfreq(self.current_sampling_times, 1 / self.sampling_rate)[
-                        :self.current_sampling_times // 2]
-                pw_fre.setXRange(0, self.sampling_rate / 2)
+                data = self.toAmplitude(self.imfs_res[i])
+                x_fre = self.xaxis(freq=True)
                 pw_fre.setFixedHeight(150)
                 pw_fre.draw(x_fre, data, pen=QColor('blue'))
                 pw_fre_list.append(pw_fre)
@@ -2322,7 +1706,6 @@ class MainWindow(QMainWindow):
 
     def EMDOptionsDialog(self):
         """使用emd分解合成滤波"""
-
         dialog = QDialog()
         dialog.resize(600, 200)
         dialog.setWindowTitle('EMD设置')
@@ -2461,7 +1844,6 @@ class MainWindow(QMainWindow):
 
     def updateEMDParams(self):
         """更新分解数和重构数"""
-
         self.emd_options_flag = self.emd_decompose_radio_btn.isChecked()
 
         if self.emd_options_flag:
@@ -2486,9 +1868,7 @@ class MainWindow(QMainWindow):
 
     def plotEMDInstantaneousFrequency(self):
         """绘制瞬时频率"""
-
-        x = np.linspace(self.sampling_times_from_num, self.sampling_times_to_num,
-                        self.current_sampling_times) / self.sampling_rate
+        x = self.xaxis()
         analytic_signal = hilbert(self.imfs_res)
         inst_phase = np.unwrap(np.angle(analytic_signal))
         inst_freqs = np.diff(inst_phase) / (2 * np.pi * (x[1] - x[0]))
@@ -2508,8 +1888,6 @@ class MainWindow(QMainWindow):
             else:
                 pw_list.append(MyPlotWidget('', '', f'IMF{i + 1}（Hz）'))
 
-            pw_list[i].setXRange(self.sampling_times_from_num / self.sampling_rate,
-                                 self.sampling_times_to_num / self.sampling_rate)
             pw_list[i].setXLink(pw_list[0])
             pw_list[i].draw(x, inst_freqs[i], pen=QColor('blue'))
             pw_list[i].setFixedHeight(150)
@@ -2524,10 +1902,12 @@ class MainWindow(QMainWindow):
 
     def iirCalculateFilterParams(self):
         """计算滤波器阶数和自然频率"""
-
         if not hasattr(self,
                        'filter') or self.filter.filter_name != self.iir_menu.sender().text():  # 如果没有操作过或两次选择的滤波器不同
-            self.filter = FilterI(self.iir_menu.sender().text())
+            try:
+                self.filter = FilterI(self.iir_menu.sender().text())
+            except Exception as err:
+                self.printError(err)
 
             dialog_layout = QVBoxLayout()
             dialog_layout.addLayout(self.filter.cal_vbox)
@@ -2544,9 +1924,11 @@ class MainWindow(QMainWindow):
 
     def iirDesignBesselFilter(self):
         """设计Bessel/Thomson滤波器"""
-
         if not hasattr(self, 'filter') or self.filter.filter_name != 'Bessel/Thomson':
-            self.filter = FilterI('Bessel/Thomson')
+            try:
+                self.filter = FilterI('Bessel/Thomson')
+            except Exception as err:
+                self.printError(err)
 
             self.filter.btn.clicked.connect(self.plotIIRFilter)
             self.filter.btn.clicked.connect(self.filter.dialog.close)
@@ -2555,9 +1937,11 @@ class MainWindow(QMainWindow):
 
     def iirDesignCombFilter(self):
         """设计comb类滤波器"""
-
         if not hasattr(self, 'filter') or self.filter.filter_name != self.iir_menu.sender().text():
-            self.filter = FilterII(self.iir_menu.sender().text())
+            try:
+                self.filter = FilterII(self.iir_menu.sender().text())
+            except Exception as err:
+                self.printError(err)
 
             self.filter.btn.clicked.connect(self.plotIIRFilter)
             self.filter.btn.clicked.connect(self.filter.dialog.close)
@@ -2566,7 +1950,6 @@ class MainWindow(QMainWindow):
 
     def plotIIRFilter(self):
         """绘制iir滤波器图"""
-
         data = self.data[self.channel_number - 1]
         data = filtfilt(self.filter.b, self.filter.a, data)  # 滤波
 
@@ -2587,7 +1970,6 @@ class MainWindow(QMainWindow):
 
     def waveletDWTDialog(self):
         """设置选择的小波、分解层数、填充模式"""
-
         dialog = QDialog()
         dialog.setWindowTitle('离散小波变换')
 
@@ -2681,7 +2063,6 @@ class MainWindow(QMainWindow):
 
     def waveletDWTChangeNameComboBox(self, index):
         """根据选择的小波族更改小波的名字"""
-
         self.wavelet_dwt_name_index = 0
         self.wavelet_dwt_name_combx.clear()
         self.wavelet_dwt_name_combx.addItems(pywt.wavelist(pywt.families()[index]))
@@ -2689,7 +2070,6 @@ class MainWindow(QMainWindow):
 
     def updateWaveletDWTParams(self):
         """更新参数"""
-
         self.wavelet_dwt_flag = self.wavelet_dwt_decompose_radiobtn.isChecked()
         self.wavelet_dwt_reconstruct = self.wavelet_dwt_reconstruct_line_edit.text()
         self.wavelet_dwt_family_index = self.wavelet_dwt_family_combx.currentIndex()
@@ -2700,7 +2080,6 @@ class MainWindow(QMainWindow):
 
     def runWaveletDWT(self):
         """分解或重构"""
-
         data = self.data[self.channel_number - 1]
 
         if self.wavelet_dwt_decompose_level_calculated:
@@ -2712,15 +2091,13 @@ class MainWindow(QMainWindow):
                 self.wavelet_dwt_coeffs = pywt.wavedec(data, wavelet=self.wavelet_dwt_name_combx.currentText(),
                                                        mode=self.wavelet_dwt_padding_mode_combx.currentText(),
                                                        level=self.wavelet_dwt_decompose_level)  # 求分解系数
-
+                self.wavelet_dwt_reconstruct = []
+                self.wavelet_dwt_reconstruct.append(f'cA{self.wavelet_dwt_decompose_level}')
+                for i in range(len(self.wavelet_dwt_coeffs) - 1, 0, -1):
+                    self.wavelet_dwt_reconstruct.append(f'cD{i}')
+                self.wavelet_dwt_former_reconstruct = self.wavelet_dwt_reconstruct
             except Exception as err:
-                printError(err)
-
-            self.wavelet_dwt_reconstruct = []
-            self.wavelet_dwt_reconstruct.append(f'cA{self.wavelet_dwt_decompose_level}')
-            for i in range(len(self.wavelet_dwt_coeffs) - 1, 0, -1):
-                self.wavelet_dwt_reconstruct.append(f'cD{i}')
-            self.wavelet_dwt_former_reconstruct = self.wavelet_dwt_reconstruct
+                self.printError(err)
 
         else:
             rec_coeffs_split = str(self.wavelet_dwt_reconstruct).split("'")
@@ -2743,7 +2120,6 @@ class MainWindow(QMainWindow):
 
     def plotWaveletDWT(self, coeffs):
         """绘图"""
-
         if self.wavelet_dwt_flag:
             wgt = QWidget()
             wgt.setFixedWidth(self.tab_widget.width())
@@ -2764,18 +2140,14 @@ class MainWindow(QMainWindow):
                     pw_time = MyPlotWidget('', '', f'cD{len(coeffs) - i}（rad）')
                     pw_fre = MyPlotWidget('', '', f'cD{len(coeffs) - i}')
 
-                x_time = np.linspace(self.sampling_times_from_num, self.sampling_times_from_num + len(coeffs[i]),
-                                     len(coeffs[i])) / self.sampling_rate
-                pw_time.setXRange(self.sampling_times_from_num / self.sampling_rate,
-                                  (self.sampling_times_from_num + len(coeffs[i])) / self.sampling_rate)
+                x_time = self.xaxis(end=self.sampling_times_from_num + len(coeffs[i]), num=len(coeffs[i]))
                 pw_time.setFixedHeight(150)
                 pw_time.draw(x_time, coeffs[i], pen=QColor('blue'))
                 pw_time_list.append(pw_time)
                 pw_time_list[i].setXLink(pw_time_list[0])
 
-                data = toAmplitude(coeffs[i], len(coeffs[i]))[:len(coeffs[i]) // 2]
-                x_fre = np.fft.fftfreq(len(coeffs[i]), 1 / self.sampling_rate)[:len(coeffs[i]) // 2]
-                pw_fre.setXRange(0, self.sampling_rate / 2)
+                data = self.toAmplitude(coeffs[i], num=len(coeffs[i]))
+                x_fre = self.xaxis(num=len(coeffs[i]), freq=True)
                 pw_fre.setFixedHeight(150)
                 pw_fre.draw(x_fre, data, pen=QColor('blue'))
                 pw_fre_list.append(pw_fre)
@@ -2795,21 +2167,18 @@ class MainWindow(QMainWindow):
             try:
                 data = pywt.waverec(coeffs, wavelet=self.wavelet_dwt_name_combx.currentText(),
                                     mode=self.wavelet_dwt_padding_mode_combx.currentText())  # 重构信号
+                combine_widget = self.initTwoPlotWidgets(data, '离散小波变换重构')
 
+                self.tab_widget.addTab(combine_widget, f'离散小波变换 -重构: 系数={self.wavelet_dwt_reconstruct}\t'
+                                                       f'小波={self.wavelet_dwt_name_combx.currentText()}\t'
+                                                       f'通道号={self.channel_number}')
+
+                self.ifUpdateData(self.if_update_data, data)
             except Exception as err:
-                printError(err)
-
-            combine_widget = self.initTwoPlotWidgets(data, '离散小波变换重构')
-
-            self.tab_widget.addTab(combine_widget, f'离散小波变换 -重构: 系数={self.wavelet_dwt_reconstruct}\t'
-                                                   f'小波={self.wavelet_dwt_name_combx.currentText()}\t'
-                                                   f'通道号={self.channel_number}')
-
-            self.ifUpdateData(self.if_update_data, data)
+                self.printError(err)
 
     def waveletThresholdDialog(self):
         """小波去噪"""
-
         dialog = QDialog()
         dialog.setWindowTitle('小波去噪')
 
@@ -2854,35 +2223,30 @@ class MainWindow(QMainWindow):
 
     def updateWaveletThresholdParams(self):
         """更新小波阈值"""
-
         self.wavelet_threshold = float(self.wavelet_threshold_line_edit.text())
         self.wavelet_threshold_sub = float(self.wavelet_threshold_sub_line_edit.text())
         self.wavelet_threshold_mode_index = self.wavelet_threshold_mode_combx.currentIndex()
 
     def plotWaveletThreshold(self):
         """绘制滤波后的图像"""
-
         data = self.data[self.channel_number - 1]
 
         try:
             data = pywt.threshold(data, value=self.wavelet_threshold,
                                   mode=self.wavelet_threshold_mode_combx.currentText(),
                                   substitute=self.wavelet_threshold_sub)  # 阈值滤波
+            combine_widget = self.initTwoPlotWidgets(data, '小波去噪')
 
+            self.tab_widget.addTab(combine_widget, f'小波去噪 - 阈值={self.wavelet_threshold}\t'
+                                                   f'阈值类型={self.wavelet_threshold_mode_combx.currentText()}\t'
+                                                   f'通道号={self.channel_number}')
+
+            self.ifUpdateData(self.if_update_data, data)
         except Exception as err:
-            printError(err)
-
-        combine_widget = self.initTwoPlotWidgets(data, '小波去噪')
-
-        self.tab_widget.addTab(combine_widget, f'小波去噪 - 阈值={self.wavelet_threshold}\t'
-                                               f'阈值类型={self.wavelet_threshold_mode_combx.currentText()}\t'
-                                               f'通道号={self.channel_number}')
-
-        self.ifUpdateData(self.if_update_data, data)
+            self.printError(err)
 
     def waveletPacketsDialog(self):
         """小波包分解"""
-
         dialog = QDialog()
         dialog.setWindowTitle('小波包')
 
@@ -2983,7 +2347,6 @@ class MainWindow(QMainWindow):
 
     def waveletPacketsChangeNameComboBox(self, index):
         """根据选择的小波族更改小波的名字"""
-
         self.wavelet_packets_name_index = 0
         self.wavelet_packets_name_combx.clear()
         self.wavelet_packets_name_combx.addItems(pywt.wavelist(pywt.families()[index]))
@@ -2991,7 +2354,6 @@ class MainWindow(QMainWindow):
 
     def waveletPacketsCalculateDecomposeMaxLevel(self):
         """根据选择的小波计算最大分解层数"""
-
         wavelet = self.wavelet_packets_name_combx.currentText()
         if wavelet != '':
             self.wavelet_packets_decompose_max_level = pywt.dwt_max_level(self.data.shape[1], wavelet)  # 最大分解层数
@@ -2999,7 +2361,6 @@ class MainWindow(QMainWindow):
 
     def updateWaveletPacketsParams(self):
         """更新小波包分解系数"""
-
         self.wavelet_packets_flag = self.wavelet_packets_decompose_radiobtn.isChecked()
         self.wavelet_packets_reconstruct = self.wavelet_packets_reconstruct_line_edit.text()
         self.wavelet_packets_family_index = self.wavelet_packets_family_combx.currentIndex()
@@ -3010,7 +2371,6 @@ class MainWindow(QMainWindow):
 
     def runWaveletPackets(self):
         """处理数据，绘图"""
-
         data = self.data[self.channel_number - 1]
 
         try:
@@ -3030,15 +2390,12 @@ class MainWindow(QMainWindow):
                 for i in total_paths:
                     if i not in self.wavelet_packets_reconstruct:
                         del self.wavelet_packets_wp[i]
-
+            self.plotWaveletPackets(self.wavelet_packets_subnodes)
         except Exception as err:
-            printError(err)
-
-        self.plotWaveletPackets(self.wavelet_packets_subnodes)
+            self.printError(err)
 
     def plotWaveletPackets(self, subnodes):
         """绘图"""
-
         if self.wavelet_packets_flag:
             wgt = QWidget()
             wgt.setFixedWidth(self.tab_widget.width())
@@ -3059,18 +2416,14 @@ class MainWindow(QMainWindow):
                     pw_time = MyPlotWidget('', '', f'{self.wavelet_packets_subnodes[i].path}（rad）')
                     pw_fre = MyPlotWidget('', '', f'{self.wavelet_packets_subnodes[i].path}')
 
-                x_time = np.linspace(self.sampling_times_from_num, self.sampling_times_from_num + len(subnodes[i].data),
-                                     len(subnodes[i].data)) / self.sampling_rate
-                pw_time.setXRange(self.sampling_times_from_num / self.sampling_rate,
-                                  (self.sampling_times_from_num + len(subnodes[i].data)) / self.sampling_rate)
+                x_time = self.xaxis(end=self.sampling_times_from_num + len(subnodes[i].data), num=len(subnodes[i].data))
                 pw_time.setFixedHeight(150)
                 pw_time.draw(x_time, subnodes[i].data, pen=QColor('blue'))
                 pw_time_list.append(pw_time)
                 pw_time_list[i].setXLink(pw_time_list[0])
 
-                data = toAmplitude(subnodes[i].data, len(subnodes[i].data))[:len(subnodes[i].data) // 2]
-                x_fre = np.fft.fftfreq(len(subnodes[i].data), 1 / self.sampling_rate)[:len(subnodes[i].data) // 2]
-                pw_fre.setXRange(0, self.sampling_rate / 2)
+                data = self.toAmplitude(subnodes[i].data, num=len(subnodes[i].data))
+                x_fre = self.xaxis(num=len(subnodes[i].data), freq=True)
                 pw_fre.setFixedHeight(150)
                 pw_fre.draw(x_fre, data, pen=QColor('blue'))
                 pw_fre_list.append(pw_fre)
@@ -3089,16 +2442,13 @@ class MainWindow(QMainWindow):
         else:
             try:
                 data = self.wavelet_packets_wp.reconstruct()  # 重构信号
+                combine_widget = self.initTwoPlotWidgets(data, '小波包重构')
 
+                self.tab_widget.addTab(combine_widget, f'小波包 -重构: 子节点={self.wavelet_packets_reconstruct}\t'
+                                                       f'小波={self.wavelet_packets_name_combx.currentText()}\t'
+                                                       f'通道号={self.channel_number}')
+
+                self.ifUpdateData(self.if_update_data, data)
             except Exception as err:
-                printError(err)
-
-            combine_widget = self.initTwoPlotWidgets(data, '小波包重构')
-
-            self.tab_widget.addTab(combine_widget, f'小波包 -重构: 子节点={self.wavelet_packets_reconstruct}\t'
-                                                   f'小波={self.wavelet_packets_name_combx.currentText()}\t'
-                                                   f'通道号={self.channel_number}')
-
-            self.ifUpdateData(self.if_update_data, data)
-
+                self.printError(err)
     # """------------------------------------------------------------------------------------------------------------"""
