@@ -10,3 +10,4 @@ dist/
 
 *.spec
 test*.py
+Record.py

@@ -1,14 +1,14 @@
 """
-2023-12-18
-ver1.6.0
+2023-1-8
+ver1.7.1
 
-1.去除信号时域和频域的直流分量
-2.修复单位转换时的数值bug
+1.更改表格响应signal
+2.修复打包bug
 """
-
 import sys
+
 from PyQt5.QtWidgets import QApplication
-from classes import MainWindow
+from mainwindow import MainWindow
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

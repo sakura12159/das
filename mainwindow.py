@@ -27,15 +27,14 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super(MainWindow, self).__init__()
-        self.initImages()
         self.initMainWindow()
         self.initGlobalParams()
         self.initUI()
         self.initMenu()
         self.initLayout()
 
-    @staticmethod
-    def initImages():
+    @classmethod
+    def initImages(cls):
         """初始化所需图片"""
         write_data = []
         for picture_name in os.listdir('Image/'):
@@ -313,7 +312,7 @@ class MainWindow(QMainWindow):
         QTableWidget.resizeRowsToContents(self.files_table_widget)
         QTableWidget.resizeColumnsToContents(self.files_table_widget)  # 设置表格排与列的宽度随内容改变
         self.files_table_widget.setSelectionBehavior(QAbstractItemView.SelectRows)  # 设置一次选中一排内容
-        self.files_table_widget.itemPressed.connect(self.selectDataFromTable)
+        self.files_table_widget.currentItemChanged.connect(self.selectDataFromTable)
 
         # 文件区布局
         file_hbox.addWidget(self.file_path_line_edit)
@@ -599,7 +598,6 @@ class MainWindow(QMainWindow):
 
     def plotAmplitudeFrequency(self):
         """绘制幅值-频率图"""
-
         self.plot_amplitude_frequency_widget.plot_item.clear()
 
         data = self.data[self.channel_number - 1]
@@ -613,7 +611,6 @@ class MainWindow(QMainWindow):
 
     def changeFilePath(self):
         """更改显示的文件路径"""
-
         file_path = QFileDialog.getExistingDirectory(self, '设置文件路径', '')  # 起始路径
         if file_path != '':
             self.file_path = file_path
@@ -621,7 +618,6 @@ class MainWindow(QMainWindow):
 
     def selectDataFromTable(self):
         """当从文件列表中选择文件时更新图像等"""
-
         self.file_names = []
         item_index = self.files_table_widget.currentIndex().row()  # 获取当前点击的文件行索引
         for i in range(self.files_read_number):
@@ -635,7 +631,6 @@ class MainWindow(QMainWindow):
 
     def changeChannelNumber(self):
         """更改通道号，默认为1"""
-
         self.channel_number = 1 if self.channel_number_spinbx.value() == '' else self.channel_number_spinbx.value()
 
     # """------------------------------------------------------------------------------------------------------------"""
@@ -643,7 +638,6 @@ class MainWindow(QMainWindow):
 
     def updateMenuBar(self):
         """更新菜单可操作性状态"""
-
         self.export_action.setEnabled(True)
         self.operation_menu.setEnabled(True)
         self.plot_menu.setEnabled(True)
@@ -652,7 +646,6 @@ class MainWindow(QMainWindow):
 
     def updateFile(self):
         """更新文件列表显示"""
-
         self.file_path_line_edit.setText(self.file_path)
         files = [f for f in os.listdir(self.file_path) if f.endswith('.dat')]
         self.files_table_widget.setRowCount(len(files))  # 有多少个文件就显示多少行
@@ -662,7 +655,6 @@ class MainWindow(QMainWindow):
 
     def updateDataParams(self):
         """更新数据相关参数"""
-
         self.current_channels = self.channel_to_num - self.channel_from_num + 1
         self.current_sampling_times = self.sampling_times_to_num - self.sampling_times_from_num + 1
 
@@ -674,7 +666,6 @@ class MainWindow(QMainWindow):
 
     def updateDataGPSTime(self):
         """更新数据时间显示"""
-
         from_time, to_time = [], []
         for i in range(6):
             ftime = str(self.time[0][i]) if i == 5 else str(self.time[0][i])[:-2]
@@ -689,14 +680,12 @@ class MainWindow(QMainWindow):
 
     def updateImages(self):
         """更新4个随时更新的图像显示"""
-
         self.plotFalseColorImage(type='gray')
         self.plotSingleChannelTime()
         self.plotAmplitudeFrequency()
 
     def updateAll(self):
         """总更新函数"""
-
         self.updateMenuBar()
         self.updateFile()
         self.updateDataParams()
@@ -954,7 +943,7 @@ class MainWindow(QMainWindow):
 
         self.time = time
         self.data = np.concatenate(data, axis=1)  # （通道数，采样次数）
-        self.filterData()
+        # self.filterData()
         self.sampling_times = self.single_sampling_times * len(self.file_names)
         self.origin_data = self.data
 
@@ -2452,3 +2441,8 @@ class MainWindow(QMainWindow):
             except Exception as err:
                 self.printError(err)
     # """------------------------------------------------------------------------------------------------------------"""
+
+
+if __name__ == '__main__':
+    # 打包前运行
+    MainWindow.initImages()
