@@ -8,6 +8,7 @@ share/
 build/
 dist/
 
+.gitignore
 *.spec
 test*.py
 Record.py
