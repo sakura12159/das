@@ -181,6 +181,7 @@ class MyPlotWidget(pg.PlotWidget):
         self.getAxis('left').setWidth(50)
         if check_mouse:
             self.initPlotItem(title, xlabel, ylabel, grid)
+        self.sig_mouse_moved_connected = False
 
     def initPlotItem(self, title, xlabel, ylabel, grid):
         """初始化一个plotitem"""
@@ -208,7 +209,9 @@ class MyPlotWidget(pg.PlotWidget):
         if self.check_mouse:
             self.plot_data_item = self.plot_item.plot(*args, **kwargs)
             self.updateAxesRange()
-            # self.plot_item.scene().sigMouseMoved.connect(self.mouseMoved)  # 绘图之后绑定槽函数，否则会导致scene快速移动
+            if not self.sig_mouse_moved_connected:
+                self.plot_item.scene().sigMouseMoved.connect(self.mouseMoved)  # 绘图之后绑定槽函数，否则会导致scene快速移动
+                self.sig_mouse_moved_connected = True
         else:
             self.plot(*args, **kwargs)
 

@@ -137,6 +137,15 @@ class MainWindow(QMainWindow):
         # 绘图
         self.plot_menu = Menu('绘图', self.menu_bar, enabled=False)
 
+        # 绘图-时域特征
+        self.plot_time_domain_features_menu = Menu('时域特征', self.plot_menu, status_tip='绘制所有通道的时域特征')
+
+        # 绘图-时域特征-最大值等
+        self.time_domain_chars_text = ['最大值', '峰值', '最小值', '平均值', '峰峰值', '绝对平均值', '均方根值', '方根幅值',
+                                       '方差', '标准差', '峭度', '偏度', '裕度因子', '波形因子', '脉冲因子', '峰值因子', '峭度因子']
+        for i in self.time_domain_chars_text:
+            _ = Action(i, self.plot_time_domain_features_menu, f'绘制{i}图', self.plotTimeDomainFeature)
+
         # 绘图-二值图
         self.plot_binary_image_action = Action('二值图', self.plot_menu, '通过设置或计算阈值来绘制二值图',
                                                self.binaryImageDialog)
@@ -144,24 +153,6 @@ class MainWindow(QMainWindow):
         # 绘图-热力图
         self.plot_heatmap_action = Action('热力图', self.plot_menu, '绘制热力图',
                                           lambda: self.plotFalseColorImage(type='heatmap'))
-
-        # 绘图-数据特征
-        self.plot_data_features_menu = Menu('数据特征', self.plot_menu, status_tip='绘制所有通道的时域或频域特征图')
-
-        # 绘图-数据特征-最大值等
-        self.time_domain_chars_text = ['最大值', '峰值', '最小值', '平均值', '峰峰值', '绝对平均值', '均方根值', '方根幅值',
-                                       '方差', '标准差', '峭度', '偏度', '裕度因子', '波形因子', '脉冲因子', '峰值因子', '峭度因子']
-
-        self.fre_domain_chars_text = ['重心频率', '平均频率', '均方根频率', '均方频率', '频率方差', '频率标准差']
-
-        for i in self.time_domain_chars_text:
-            _ = Action(i, self.plot_data_features_menu, f'绘制{i}图', self.plotTimeDomainFeature)
-
-        # 时域和频域特征之间的分隔线
-        self.plot_data_features_menu.addSeparator()
-
-        for i in self.fre_domain_chars_text:
-            _ = Action(i, self.plot_data_features_menu, f'绘制{i}图', self.plotFrequencyDomainFeature)
 
         # 绘图-多通道云图
         self.plot_multichannel_image_action = Action('多通道云图', self.plot_menu, '绘制多通道云图',
@@ -172,48 +163,56 @@ class MainWindow(QMainWindow):
 
         self.plot_menu.addSeparator()
 
-        # 绘图-功率谱密度图
-        self.plot_psd_menu = Menu('功率谱密度图', self.plot_menu)
+        # 绘图-频域特征
+        self.plot_freq_domain_features_menu = Menu('频域特征', self.plot_menu, status_tip='绘制所有通道的频域特征')
 
-        # 绘图-功率谱密度图-功率谱密度图
-        self.plot_psd_action = Action('功率谱密度图', self.plot_psd_menu, '绘制功率谱密度图', self.plotPSD)
+        # 绘图-频域特征-重心频率等
+        self.fre_domain_chars_text = ['重心频率', '平均频率', '均方根频率', '均方频率', '频率方差', '频率标准差']
+        for i in self.fre_domain_chars_text:
+            _ = Action(i, self.plot_freq_domain_features_menu, f'绘制{i}图', self.plotFrequencyDomainFeature)
 
-        # 绘图-功率谱密度图-功率谱密度色块图
-        self.plot_2d_psd_action = Action('功率谱密度色块图', self.plot_psd_menu, '绘制功率谱密度色块图', self.plot2dPSD)
+        # 绘图-fft
+        self.plot_fft_menu = Menu('fft', self.plot_menu)
 
-        # 绘图-功率谱密度图-三维功率谱密度图
-        self.plot_3d_psd_action = Action('三维功率谱密度图', self.plot_psd_menu, '绘制三维功率谱密度图', self.plot3dPSD)
-
-        # 绘图-谱
-        self.plot_spectrum_menu = Menu('谱', self.plot_menu)
-
-        # 绘图-谱-幅度谱
-        self.plot_mag_spectrum_action = Action('幅度谱', self.plot_spectrum_menu, '绘制幅度谱',
+        # 绘图-fft-幅度谱
+        self.plot_mag_spectrum_action = Action('幅度谱', self.plot_fft_menu, '绘制幅度谱',
                                                self.plotMagnitudeSpectrum)
 
-        # 绘图-谱-幅度谱色块图
-        self.plot_2d_mag_spectrum_action = Action('幅度谱色块图', self.plot_spectrum_menu, '绘制幅度谱色块图',
+        # 绘图-fft-角度谱
+        self.plot_ang_spectrum_action = Action('角度谱', self.plot_fft_menu, '绘制角度谱', self.plotAngleSpectrum)
+
+        # 绘图-fft-功率谱密度
+        self.plot_psd_action = Action('功率谱密度', self.plot_fft_menu, '绘制功率谱密度', self.plotPSD)
+        
+        # 绘图-stft
+        self.plot_stft_menu = Menu('stft', self.plot_menu)
+
+        # 绘图-stft-功率谱密度
+        self.plot_2d_psd_action = Action('功率谱密度', self.plot_stft_menu, '绘制功率谱密度', self.plot2dPSD)
+
+        # 绘图-stft-三维功率谱密度
+        self.plot_3d_psd_action = Action('三维功率谱密度', self.plot_stft_menu, '绘制三维功率谱密度', self.plot3dPSD)
+
+        # 绘图-stft-幅度谱
+        self.plot_2d_mag_spectrum_action = Action('幅度谱', self.plot_stft_menu, '绘制幅度谱',
                                                   self.plot2dMagnitudeSpectrum)
 
-        # 绘图-谱-三维幅度谱
-        self.plot_3d_mag_psd_action = Action('三维幅度谱', self.plot_spectrum_menu, '绘制三维幅度谱',
+        # 绘图-stft-三维幅度谱
+        self.plot_3d_mag_psd_action = Action('三维幅度谱', self.plot_stft_menu, '绘制三维幅度谱',
                                              self.plot3dMagnitudeSpectrum)
 
-        self.plot_spectrum_menu.addSeparator()
-
-        # 绘图-谱-角度谱
-        self.plot_ang_spectrum_action = Action('角度谱', self.plot_spectrum_menu, '绘制角度谱', self.plotAngleSpectrum)
-
-        # 绘图-谱-角度谱色块图
-        self.plot_2d_ang_spectrum_action = Action('角度谱色块图', self.plot_spectrum_menu, '绘制角度谱色块图',
+        # 绘图-stft-角度谱
+        self.plot_2d_ang_spectrum_action = Action('角度谱', self.plot_stft_menu, '绘制角度谱',
                                                   self.plot2dAngleSpectrum)
 
-        # 绘图-谱-三维角度谱
-        self.plot_3d_ang_spectrum_action = Action('三维角度谱', self.plot_spectrum_menu, '绘制三维角度谱',
+        # 绘图-stft-三维角度谱
+        self.plot_3d_ang_spectrum_action = Action('三维角度谱', self.plot_stft_menu, '绘制三维角度谱',
                                                   self.plot3dAngleSpectrum)
 
+        self.plot_stft_menu.addSeparator()
+
         # 绘图-加窗设置
-        self.window_options_action = Action('加窗设置', self.plot_menu, '设置加窗参数', self.windowOptionsDialog)
+        self.window_options_action = Action('加窗设置', self.plot_stft_menu, '设置加窗参数', self.windowOptionsDialog)
 
         # 滤波
         self.filter_menu = Menu('滤波', self.menu_bar, enabled=False)
@@ -1327,7 +1326,7 @@ class MainWindow(QMainWindow):
 
     def plotFeature(self, features):
         """获取要计算的数据特征名字和值"""
-        feature_name = self.plot_data_features_menu.sender().text()
+        feature_name = self.plot_menu.sender().text()
         feature = features[feature_name]
 
         plot_widget = MyPlotWidget(feature_name + '图', '通道', '')
@@ -1369,7 +1368,7 @@ class MainWindow(QMainWindow):
         data = self.data[self.channel_number - 1]
         data = self.window_method(self.current_sampling_times) * data
         data = np.abs(np.fft.fft(data)[:self.current_sampling_times // 2])
-        data = 20.0 * np.log10(data ** 2 / self.current_sampling_times)  # 转dB单位
+        data = 20.0 * np.log10(data ** 2 / self.current_sampling_times + 1e-5)  # 转dB单位
         plot_widget = MyPlotWidget('功率谱密度图', '频率（Hz）', '功率/频率（dB/Hz）', grid=True)
         x = self.xaxis(freq=True)
         plot_widget.draw(x, data, pen=QColor('blue'))
@@ -1380,7 +1379,7 @@ class MainWindow(QMainWindow):
         """绘制2dpsd谱"""
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
-        self.tab_widget.addTab(figure_widget, f'功率谱密度色块图 - 窗口类型={self.window_text}\t'
+        self.tab_widget.addTab(figure_widget, f'功率谱密度 - 窗口类型={self.window_text}\t'
                                               f'通道号={self.channel_number}')
         data = self.data[self.channel_number - 1]
         ax = plt.gca()
@@ -1388,9 +1387,9 @@ class MainWindow(QMainWindow):
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='density', mode='psd')
-        plt.pcolormesh(t, f, 20.0 * np.log10(Sxx), cmap='rainbow')
+        plt.pcolormesh(t, f, 20.0 * np.log10(Sxx + 1e-5), cmap='viridis')
         plt.colorbar(label='功率/频率（dB/Hz）')
-        plt.title('功率谱密度色块图')
+        plt.title('功率谱密度')
         plt.xlabel('时间（s）')
         plt.ylabel('频率（Hz）')
         plt.xlim(0, self.current_sampling_times / self.sampling_rate)
@@ -1400,7 +1399,7 @@ class MainWindow(QMainWindow):
         data = self.data[self.channel_number - 1]
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
-        self.tab_widget.addTab(figure_widget, f'三维功率谱密度图 - 窗口类型={self.window_text}\t'
+        self.tab_widget.addTab(figure_widget, f'三维功率谱密度 - 窗口类型={self.window_text}\t'
                                               f'通道号={self.channel_number}')
 
         ax = figure.add_subplot(projection='3d')
@@ -1408,9 +1407,9 @@ class MainWindow(QMainWindow):
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='density', mode='psd')
-        im = ax.plot_surface(f[:, None], t[None, :], 20.0 * np.log10(Sxx), cmap='rainbow')
-        # plt.colorbar(im, ax=ax, label='功率/频率（dB/Hz）', pad=0.2)
-        ax.set_title('三维功率谱密度图')
+        im = ax.plot_surface(f[:, None], t[None, :], 20.0 * np.log10(Sxx + 1e-5), cmap='viridis')
+        plt.colorbar(im, ax=ax, label='功率/频率（dB/Hz）', pad=0.2)
+        ax.set_title('三维功率谱密度')
         ax.set_xlabel('频率（Hz）')
         ax.set_ylabel('时间（s）')
         ax.set_zlabel('功率/频率（dB/Hz）')
@@ -1424,7 +1423,7 @@ class MainWindow(QMainWindow):
         data = self.data[self.channel_number - 1]
         data = self.window_method(self.current_sampling_times) * data
         data = 20.0 * np.log10(
-            np.abs(np.fft.fft(data)[:self.current_sampling_times // 2]) / self.current_sampling_times)
+            np.abs(np.fft.fft(data)[:self.current_sampling_times // 2]) / self.current_sampling_times + 1e-5)
         plot_widget = MyPlotWidget('幅度谱', '频率（Hz）', '幅度（dB）', grid=True)
         x = self.xaxis(freq=True)
         plot_widget.draw(x, data, pen=QColor('blue'))
@@ -1435,7 +1434,7 @@ class MainWindow(QMainWindow):
         """绘制2d幅度谱"""
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
-        self.tab_widget.addTab(figure_widget, f'幅度谱色块图 - 窗口类型={self.window_text}\t'
+        self.tab_widget.addTab(figure_widget, f'幅度谱 - 窗口类型={self.window_text}\t'
                                               f'通道号={self.channel_number}')
 
         data = self.data[self.channel_number - 1]
@@ -1444,9 +1443,9 @@ class MainWindow(QMainWindow):
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='spectrum', mode='magnitude')
-        plt.pcolormesh(t, f, 20.0 * np.log10(Sxx), cmap='rainbow')
+        plt.pcolormesh(t, f, 20.0 * np.log10(Sxx + 1e-5), cmap='viridis')
         plt.colorbar(label='幅度（dB）')
-        plt.title('幅度谱色块图')
+        plt.title('幅度谱')
         plt.xlabel('时间（s）')
         plt.ylabel('频率（Hz）')
         plt.xlim(0, self.current_sampling_times / self.sampling_rate)
@@ -1464,8 +1463,8 @@ class MainWindow(QMainWindow):
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='spectrum', mode='magnitude')
-        im = ax.plot_surface(f[:, None], t[None, :], 20.0 * np.log10(Sxx), cmap='rainbow')
-        # plt.colorbar(im, ax=ax, label='幅度（dB）', pad=0.2)
+        im = ax.plot_surface(f[:, None], t[None, :], 20.0 * np.log10(Sxx + 1e-5), cmap='viridis')
+        plt.colorbar(im, ax=ax, label='幅度（dB）', pad=0.2)
         ax.set_title('三维幅度谱')
         ax.set_xlabel('频率（Hz）')
         ax.set_ylabel('时间（s）')
@@ -1487,7 +1486,7 @@ class MainWindow(QMainWindow):
         """绘制2d角度谱"""
         figure = plt.figure()
         figure_widget = FigureCanvas(figure)
-        self.tab_widget.addTab(figure_widget, f'角度谱色块图 - 窗口类型={self.window_text}\t'
+        self.tab_widget.addTab(figure_widget, f'角度谱 - 窗口类型={self.window_text}\t'
                                               f'通道号={self.channel_number}')
 
         data = self.data[self.channel_number - 1]
@@ -1496,9 +1495,9 @@ class MainWindow(QMainWindow):
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='spectrum', mode='angle')
-        plt.pcolormesh(t, f, Sxx, cmap='rainbow')
+        plt.pcolormesh(t, f, Sxx, cmap='viridis')
         plt.colorbar(label='角度（rad）')
-        plt.title('角度谱色块图')
+        plt.title('角度谱')
         plt.xlabel('时间（s）')
         plt.ylabel('频率（Hz）')
         plt.xlim(0, self.current_sampling_times / self.sampling_rate)
@@ -1516,8 +1515,8 @@ class MainWindow(QMainWindow):
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='spectrum', mode='angle')
-        im = ax.plot_surface(f[:, None], t[None, :], Sxx, cmap='rainbow')
-        # plt.colorbar(im, ax=ax, label='角度（rad）', pad=0.2)
+        im = ax.plot_surface(f[:, None], t[None, :], Sxx, cmap='viridis')
+        plt.colorbar(im, ax=ax, label='角度（rad）', pad=0.2)
         ax.set_title('三维角度谱')
         ax.set_xlabel('频率（Hz）')
         ax.set_ylabel('时间（s）')
