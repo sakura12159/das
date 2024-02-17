@@ -1,14 +1,14 @@
 """
-2023-1-20
-ver1.7.2
+2023-2-17
+ver1.7.3
 
-1.修复长时间显示数据标签时的卡顿
-2.重构plot菜单结构
+1.重构代码结构
+2.初步添加类型提示
 """
 import sys
 
 from PyQt5.QtWidgets import QApplication
-from mainwindow import MainWindow
+from utils.mainwindow import MainWindow
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
