@@ -2,7 +2,6 @@ import ctypes
 import sys
 from itertools import cycle
 
-import numpy as np
 import pandas as pd
 import pywt
 from PyEMD import EMD, EEMD, CEEMDAN
@@ -1050,6 +1049,7 @@ class MainWindow(QMainWindow):
 
         btn = PushButton('确定')
         btn.clicked.connect(self.updateFilesReadNumber)
+        btn.clicked.connect(self.updateImages)
         btn.clicked.connect(dialog.close)
 
         vbox = QVBoxLayout()
@@ -1197,10 +1197,8 @@ class MainWindow(QMainWindow):
     def plotStrain(self):
         """将相位差转为应变率再积分"""
         data = self.data[self.channel_number - 1]
-        x = self.xAxis(begin=1, end=self.current_sampling_times, num=self.current_sampling_times)
-        data = integrate.cumtrapz(data, x, initial=0) * 1e6
-
         x = self.xAxis()
+        data = integrate.cumtrapz(data, x, initial=0) * 1e6
         plot_widget = MyPlotWidget('应变图', '时间（s）', '应变（με）', grid=True)
         plot_widget.draw(x, data, pen=QColor('blue'))
         self.tab_widget.addTab(plot_widget, f'应变图 - 通道号={self.channel_number}')
@@ -1214,7 +1212,7 @@ class MainWindow(QMainWindow):
         data = self.window_method(self.current_sampling_times) * data
         mag = np.abs(np.fft.fft(data)[:self.current_sampling_times // 2])
         ps = mag ** 2 / self.current_sampling_times
-        data = 20.0 * np.log10(ps / self.sampling_rate + 1e-5)  # 转dB单位
+        data = 20.0 * np.log10(ps / self.sampling_rate + 1e-9)  # 转dB单位
         plot_widget = MyPlotWidget('功率谱密度图', '频率（Hz）', '功率/频率（dB/Hz）', grid=True)
         x = self.xAxis(freq=True)
         plot_widget.draw(x, data, pen=QColor('blue'))
