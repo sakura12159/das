@@ -1,3 +1,11 @@
+# -*- coding: utf-8 -*-
+"""
+@Time    : 2024/6/12 上午9:28
+@Author  : zxy
+@File    : widgets.py
+"""
+from cmath import inf
+
 import numpy as np
 import pyqtgraph as pg
 from typing import Callable, Union, Tuple
@@ -5,11 +13,10 @@ from typing import Callable, Union, Tuple
 from PyQt5.QtCore import QRegExp, Qt
 from PyQt5.QtGui import QRegExpValidator, QFont, QColor
 from PyQt5.QtWidgets import QLineEdit, QLabel, QComboBox, QCheckBox, QPushButton, QRadioButton, QSpinBox, QMenu, \
-    QAction, QWidget
+    QAction, QWidget, QTextEdit, QDialog
 
 
 class Menu(QMenu):
-
     def __init__(self, title: str, parent: QWidget, status_tip: str = None, enabled: bool = True):
         super().__init__(title=title, parent=parent)
         self.setStatusTip(status_tip)
@@ -18,7 +25,6 @@ class Menu(QMenu):
 
 
 class Action(QAction):
-
     def __init__(self, text: str, parent: QWidget, status_tip: str, slot_func: Callable, shortcut: Union[int, str] = 0):
         super().__init__(text=text, parent=parent)
         self.setStatusTip(status_tip)
@@ -27,70 +33,84 @@ class Action(QAction):
         parent.addAction(self)
 
 
-class Label(QLabel):
+class Dialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint)
 
+
+class Label(QLabel):
     def __init__(self, text: str):
         super().__init__(text)
         self.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
 
 
 class PushButton(QPushButton):
-
-    def __init__(self, text: str):
+    def __init__(self, text: str = None):
         super().__init__(text)
         self.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
 
 
 class LineEdit(QLineEdit):
-
-    def __init__(self):
+    def __init__(self, focus: bool = True):
         super().__init__()
+        if not focus:
+            self.setFocusPolicy(Qt.NoFocus)
         self.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
 
 
-class OnlyNumLineEdit(LineEdit):
-    """只能输入数字和"""
+class LineEditWithReg(LineEdit):
+    """只能输入数字"""
 
-    def __init__(self):
-        super().__init__()
-        self.regex = QRegExp('[0-9]+')
+    def __init__(self, digit: bool = False, space: bool = False, *args, **kwargs):
+        """
+        带正则的行输入
+        Args:
+            digit: 是否可输入小数点
+            space: 是否可输入空格
+            *args:
+            **kwargs:
+        """
+        super().__init__(*args, **kwargs)
+        if digit and space:
+            reg = '[0-9. ]+'
+        elif digit:
+            reg = '[0-9.]+'
+        elif space:
+            reg = '[0-9 ]+'
+        else:
+            reg = '[0-9]+'
+        self.regex = QRegExp(reg)
         self.validator = QRegExpValidator(self.regex)
         self.setValidator(self.validator)
 
 
-class NumPointLineEdit(LineEdit):
-    """只能输入数字和."""
-
+class TextEdit(QTextEdit):
     def __init__(self):
         super().__init__()
-        self.regex = QRegExp('[0-9. ]+')
-        self.validator = QRegExpValidator(self.regex)
-        self.setValidator(self.validator)
+        self.setReadOnly(True)
+        self.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
 
 
 class ComboBox(QComboBox):
-
     def __init__(self):
         super().__init__()
         self.setStyleSheet('font-size: 16px; font-family: "Times New Roman", "Microsoft YaHei";')
 
 
 class RadioButton(QRadioButton):
-
     def __init__(self, text: str):
         super().__init__(text)
         self.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
 
 
 class CheckBox(QCheckBox):
-
     def __init__(self, text: str):
         super().__init__(text)
         self.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
 
 
 class SpinBox(QSpinBox):
-
     def __init__(self):
         super().__init__()
         self.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
@@ -98,7 +118,6 @@ class SpinBox(QSpinBox):
 
 # class FigureCanvas(FigureCanvasQTAgg):
 #     """设置matplotlib图可以鼠标拖动和缩放"""
-#
 #     def __init__(self, figure):
 #         super(FigureCanvas, self).__init__(figure)
 #         self.mouseX = 0  # 获取鼠标按下时的坐标X
@@ -256,8 +275,11 @@ class MyPlotWidget(pg.PlotWidget):
 
     def searchPointIndex(self, xpos: float, ypos: float) -> int:
         """寻找x坐标附近的点，返回该点的索引"""
-        distances = {}
-        for i in range(self.data.shape[1]):
-            distances[np.sqrt((xpos - self.data[0][i]) ** 2 + (ypos - self.data[1][i]) ** 2)] = i
-
-        return distances[sorted(distances)[0]]
+        mn = inf
+        idx = -1
+        for i, (x, y) in enumerate(zip(*self.data)):
+            dis = ((xpos - x) ** 2 + (ypos - y) ** 2) ** 0.5
+            if dis < mn:
+                mn = dis
+                idx = i
+        return idx

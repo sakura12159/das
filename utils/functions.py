@@ -1,6 +1,12 @@
-import os
+# -*- coding: utf-8 -*-
+"""
+@Time    : 2024/6/12 上午9:27
+@Author  : zxy
+@File    : functions.py
+"""
 import base64
-from typing import List, Dict, Union
+import os
+from typing import Dict, Union
 
 import numpy as np
 import soundfile
@@ -10,7 +16,7 @@ from scipy import stats
 from scipy.signal import detrend
 
 
-def printError(err: Exception) -> None:
+def printError(err: Union[Exception, str]) -> None:
     """将捕获的错误输出"""
     QMessageBox.warning(None, '错误', f'<font face="Times New Roman" size="4">{err}</font>!', QMessageBox.Ok)
 
@@ -154,7 +160,8 @@ def calculateTimeDomainFeatures(data: np.array) -> Dict:
     features = {'最大值': max_value, '峰值': peak_value, '最小值': min_value, '平均值': mean, '峰峰值': peak_peak_value,
                 '绝对平均值': mean_absolute_value, '均方根值': root_mean_square, '方根幅值': square_root_amplitude,
                 '方差': variance, '标准差': standard_deviation, '峭度': kurtosis, '偏度': skewness,
-                '裕度因子': clearance_factor, '波形因子': shape_factor, '脉冲因子': impulse_factor, '峰值因子': crest_factor,
+                '裕度因子': clearance_factor, '波形因子': shape_factor, '脉冲因子': impulse_factor,
+                '峰值因子': crest_factor,
                 '峭度因子': kurtosis_factor}
     return features
 
@@ -183,5 +190,6 @@ def calculateFrequencyDomainFeatures(data: np.array, sampling_rate: int) -> Dict
     frequency_standard_deviation = np.sqrt(frequency_variance)  # 频率标准差
 
     features = {'重心频率': centroid_frequency, '平均频率': mean_frequency, '均方根频率': root_mean_square_frequency,
-                '均方频率': mean_square_frequency, '频率方差': frequency_variance, '频率标准差': frequency_standard_deviation}
+                '均方频率': mean_square_frequency, '频率方差': frequency_variance,
+                '频率标准差': frequency_standard_deviation}
     return features
