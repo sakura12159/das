@@ -4,7 +4,6 @@
 @Author  : zxy
 @File    : filters.py
 """
-import re
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout
@@ -99,23 +98,23 @@ class FilterI:
         cal_label.setAlignment(Qt.AlignHCenter)
 
         wp_label = Label('通带频率（wp）')
-        self.dialog.wp_le = LineEditWithReg(digit=True)
-        self.dialog.wp_le.setToolTip('与带奎斯特频率的比值\n'
+        self.dialog.wp_le = LineEditWithReg(digit=True, space=True)
+        self.dialog.wp_le.setToolTip('与奈奎斯特频率的比值，选择带通或带阻滤波器时应以空格分隔截止频率比值\n'
                                      '例如：\n'
                                      'lowpass: wp = 0.2, ws = 0.3\n'
                                      'highpass: wp = 0.3, ws = 0.2\n'
-                                     'bandpass: wp = [0.2, 0.5], ws = [0.1, 0.6]\n'
-                                     'bandstop: wp = [0.1, 0.6], ws = [0.2, 0.5]')
+                                     'bandpass: wp = 0.2 0.5, ws = 0.1 0.6\n'
+                                     'bandstop: wp = 0.1 0.6, ws = 0.2 0.5')
         self.dialog.wp_le.textChanged.connect(self.resetCalculateParmas)
 
         ws_label = Label('阻带频率（ws）')
-        self.dialog.ws_le = LineEditWithReg(digit=True)
-        self.dialog.ws_le.setToolTip('与带奎斯特频率的比值\n'
+        self.dialog.ws_le = LineEditWithReg(digit=True, space=True)
+        self.dialog.ws_le.setToolTip('与奈奎斯特频率的比值，选择带通或带阻滤波器时应以空格分隔截止频率比值\n'
                                      '例如：\n'
                                      'lowpass: wp = 0.2, ws = 0.3\n'
                                      'highpass: wp = 0.3, ws = 0.2\n'
-                                     'bandpass: wp = [0.2, 0.5], ws = [0.1, 0.6]\n'
-                                     'bandstop: wp = [0.1, 0.6], ws = [0.2, 0.5]')
+                                     'bandpass: wp = 0.2 0.5, ws = 0.1 0.6\n'
+                                     'bandstop: wp = 0.1 0.6, ws = 0.2 0.5')
         self.dialog.ws_le.textChanged.connect(self.resetCalculateParmas)
 
         gpass_label = Label('通带损失（gpass）')
@@ -195,7 +194,7 @@ class FilterI:
         self.dialog.order_le.setToolTip('滤波器的阶数')
 
         Wn_label = Label('自然频率（Wn）')
-        self.dialog.Wn_le = LineEditWithReg(digit=True)
+        self.dialog.Wn_le = LineEditWithReg(digit=True, space=True)
         self.dialog.Wn_le.setToolTip('与奈奎斯特频率的比值')
 
         btn = PushButton('确定')
@@ -297,10 +296,9 @@ class FilterI:
         self.norm = self.dialog.norm_combx.currentText()
         self.order = int(self.dialog.order_le.text())
         self.Wn = self.dialog.Wn_le.text()
+        self.Wn = list(map(float, self.Wn.split(' ')))
         if self.method == 'lowpass' or self.method == 'highpass':
-            self.Wn = float(self.Wn)
-        else:
-            self.Wn = [float(i) for i in re.findall('[0]{1}.{1}\d+', self.Wn)]
+            self.Wn = self.Wn[0]
 
     def calculateParams(self):
         """
@@ -314,24 +312,25 @@ class FilterI:
         self.method = self.dialog.combx.currentText()
 
         if self.flag:
+            wp = list(map(float, self.wp.split(' ')))
+            ws = list(map(float, self.ws.split(' ')))
             if self.method == 'lowpass' or self.method == 'highpass':
-                wp = float(self.wp)
-                ws = float(self.ws)
-            else:
-                wp = [float(i) for i in re.findall('[0]{1}.{1}\d+', self.wp)]
-                ws = [float(i) for i in re.findall('[0]{1}.{1}\d+', self.ws)]
+                wp = wp[0]
+                ws = ws[0]
 
             self.cal_order, self.cal_Wn = self.cal_names[self.filter](wp=wp, ws=ws, gpass=self.gpass,
                                                                       gstop=self.gstop, analog=self.analog)
+            if self.method == 'lowpass' or self.method == 'highpass':
+                self.cal_Wn = [self.cal_Wn]
 
             self.dialog.cal_order_le.setText(str(self.cal_order))
-            self.dialog.cal_Wn_le.setText(str(self.cal_Wn))
+            self.dialog.cal_Wn_le.setText(' '.join(map(str, self.cal_Wn)))
             self.dialog.cal_btn.setText('输入阶数与自然频率')
             self.flag = False
 
         else:
             self.dialog.order_le.setText(str(self.cal_order))
-            self.dialog.Wn_le.setText(str(self.cal_Wn))
+            self.dialog.Wn_le.setText(' '.join(map(str, self.cal_Wn)))
 
     def resetCalculateParmas(self):
         """
@@ -537,19 +536,16 @@ class FilterII:
 
 
 class Filter:
-    def __init__(self, parent, filter_name):
+    def __init__(self, parent):
         """
         根据滤波器名创建滤波器类
         Args:
-            parent:
-            filter_name:
+            parent: 父级，为主窗口
         """
-        self.filter_name = filter_name
-        if filter_name in {'Butterworth', 'Chebyshev type I', 'Chebyshev type II',
-                           'Elliptic (Cauer)', 'Bessel/Thomson'}:
-            self.obj = FilterI(parent, filter_name)
-        else:
-            self.obj = FilterII(parent, filter_name)
+        self.parent = parent
+        self.filter_name = ' '
+        self.name = None
+        self.obj = None
 
     def runDialog(self):
         """
@@ -557,4 +553,11 @@ class Filter:
         Returns:
 
         """
+        if self.name != self.filter_name:
+            self.filter_name = self.name
+            if self.filter_name in {'Butterworth', 'Chebyshev type I', 'Chebyshev type II',
+                                    'Elliptic (Cauer)', 'Bessel/Thomson'}:
+                self.obj = FilterI(self.parent, self.filter_name)
+            else:
+                self.obj = FilterII(self.parent, self.filter_name)
         self.obj.runDialog()

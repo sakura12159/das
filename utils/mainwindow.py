@@ -1751,9 +1751,9 @@ class MainWindow(QMainWindow):
     """滤波-IIR滤波器-Butterworth调用函数"""
 
     def iirFilterDesign(self):
-        name = self.filter_menu.sender().text()
-        if not self.filter or self.filter.filter_name != name:
-            self.filter = Filter(self, name)
+        if not self.filter:
+            self.filter = Filter(self)
+        self.filter.name = self.filter_menu.sender().text()
         self.filter.runDialog()
 
     # """------------------------------------------------------------------------------------------------------------"""

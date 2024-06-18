@@ -6,13 +6,11 @@
 """
 import pickle
 from pathlib import Path
-from typing import List
+from typing import List, Callable
 
-import matplotlib
 import numpy as np
-from PyQt5.QtWidgets import QFileDialog, QHBoxLayout, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QFileDialog, QHBoxLayout, QVBoxLayout
 from image.image import folder_jpg, import_jpg
-from pylab import mpl
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from numpy import correlate
@@ -35,72 +33,91 @@ def save_pickle(file: Path, data: np.array) -> None:
     f.close()
 
 
-class AbstractDetection:
+class Base:
     """双门限法信号筛选基类"""
 
-    def __init__(self) -> None:
-        self.noise_list = []  # 噪声文件列表
-        self.data_list = []  # 数据文件列表
+    def __init__(self,
+                 noise: Path,
+                 file_path: List,
+                 signal_threshold_ratio: float,
+                 endpoint_threshold_ratio: float,
+                 minimal_signal_length: float = 1.,
+                 signal_interval: float = 0.5,
+                 window_func: Callable = hamming,
+                 frame_length: int = 128,
+                 frame_shift: int = 96) -> None:
+        """
+        初始化参数
+        Args:
+            noise: 包含分段噪声信号的字典，时长需为一个文件长，键为噪声文件路径，格式为 pathlib.PosixPath，
+                   值为包含与当前噪声文件对应的起止通道（包含）的List，且每段通道数之和应与数据文件总通道数一致，
+                   各噪声文件其他参数应于数据文件一致
+            file_path: 由 pathlib.PosixPath 组成的列表，每一个都是以.dat为结尾的数据文件
+            signal_threshold_ratio: 信号特征阈值与噪声段特征的比
+            endpoint_threshold_ratio: 信号端点特征阈值与噪声段特征的比
+            minimal_signal_length: 信号最短长度，信号长度小于该值会被舍去
+            signal_interval: 信号间的间隔，两段信号间间隔小于该值会将两端信号与之间的间隔合成为一段信号
+            window_func: 窗函数
+            frame_length: 帧长
+            frame_shift: 帧移
+        """
+        self.file_path = file_path
+        self.file_path.sort()
+        self.file_name = [file.stem for file in self.file_path]  # 所有的文件名
 
-        self.minimum_signal_length = 0.  # 信号最短长度，信号长度小于该值会被舍去
-        self.signal_interval = 0.  # 信号间的间隔，两段信号间间隔小于该值会将两端信号与之间的间隔合成为一段信号
-        self.signal_threshold_ratio = 0.  # 信号特征阈值与噪声段特征的比
-        self.signal_endpoints_threshold_ratio = 0.  # 信号端点特征阈值与噪声段特征的比
+        self.sampling_rate = 0
+        self.sampling_times = 0
+        self.channels_num = 0
+        self.data = self._filter_data(data=self._read_data())
 
-        self.frame_length = 0  # 帧长
-        self.frame_shift = 0  # 帧移
+        self.noise = noise
+        self.noise_data = self._filter_data(data=self._read_noise())
+        self._concat_data()
 
-        self.sampling_rate = 0  # 采样率
-        self.sampling_times = 0  # 单文件采样次数
-        self.channels_num = 0  # 通道数
-        self.total_sampling_times = 0  # 总采样点数
+        self.total_sampling_times = (len(self.file_path) + 1) * self.sampling_times
 
-        self.noise_data = np.array([])  # 噪声数据
-        self.noise_num = 0  # 噪声文件数量
-        self.data_name = []  # 所有的文件名
-        self.data = np.array([])  # 要筛选的数据
+        self.minimal_signal_length = minimal_signal_length
+        self.signal_interval = signal_interval
+        self.window_func = window_func
+        self.frame_length = frame_length
+        self.frame_shift = frame_shift
+        self.signal_threshold_ratio = signal_threshold_ratio
+        self.endpoint_threshold_ratio = endpoint_threshold_ratio
+
+        self.frames = []  # 经分帧后的帧
+        self.frame_indices = []  # 包含每一帧起始索引对
+        self.frames_num = 0  # 分帧后的总帧数
+        self.no_signal_frames_num = self._get_no_signal_frames_num()
+
+        self.feature = {}  # 各帧对应的特征值
+        self.signal_threshold = {}  # 各通道信号特征值阈值
+        self.endpoint_threshold = {}  # 各通道信号端点特征值阈值
+        self.compare_mode = ""  # 特征阈值与特征的比较方法，more代表>=，less代表<=
 
         self.signals = {}  # 信号字典，key为通道号，value为包含对应通道信号的List
-        self.signals_num = 0  # 信号总数量
+        self.signal_nums = 0  # 信号总数量
         self.signal_indices = {}  # 信号索引字典，key为通道号，value为包含对应同号信号索引的List
         self.search_channels = []  # 所有要搜索的通道号
         self.signal_channels = []  # 满足搜索条件，有信号的通道号
         self.saving_names = {}  # 保存数据名的字典，key为通道号，value为包含对应所保存信号起始及时间str的List
 
-        self.window_func = None  # 窗函数
+        self._init_rc_params()
 
-        self.frames = np.array([])  # 经分帧后的帧
-        self.frame_indices = []  # 包含每一帧起始索引对
-        self.no_signal_frames_num = 0  # 静音帧数
+        print("Initialization completed")
 
-        self.feature = {}  # 各帧对应的特征值
-        self.signal_threshold = {}  # 各通道信号特征值阈值
-        self.endpoint_threshold = {}  # 各通道信号端点特征值阈值
-
-    def init_params(self) -> None:
+    @staticmethod
+    def _init_rc_params() -> None:
         """
-        初始化各种参数
+        初始化rc.Params
         Returns:
-
         """
-        plt.rcParams['font.sans-serif'] = ['SimHei', 'Times New Roman']  # 显示中文
-        plt.rcParams['axes.unicode_minus'] = False  # 显示负号
-        plt.rcParams['axes.labelsize'] = 16
-        plt.rcParams['axes.titlesize'] = 24
-        plt.rcParams['xtick.labelsize'] = 12
-        plt.rcParams['ytick.labelsize'] = 12
-        plt.rcParams['legend.fontsize'] = 16
-
-        self.data_list.sort()
-        self.data_name = [file.stem for file in self.data_list]  # 所有的文件名
-        self.data = self._filter_data(data=self._read_data())
-        self.noise_data = self._filter_data(data=self._read_noise())
-        self.data = np.concatenate([self.noise_data, self.data], axis=1)
-
-        self.noise_num = len(self.noise_list)
-        self.total_sampling_times = (len(self.data_list) + self.noise_num) * self.sampling_times
-
-        self.no_signal_frames_num = self._get_no_signal_frames_num()
+        plt.rcParams["font.sans-serif"] = ["SimHei", "Times New Roman"]  # 显示中文
+        plt.rcParams["axes.unicode_minus"] = False  # 显示负号
+        plt.rcParams["axes.labelsize"] = 16
+        plt.rcParams["axes.titlesize"] = 24
+        plt.rcParams["xtick.labelsize"] = 12
+        plt.rcParams["ytick.labelsize"] = 12
+        plt.rcParams["legend.fontsize"] = 16
 
     @staticmethod
     def _detrend_data(data: np.array) -> np.array:
@@ -117,15 +134,15 @@ class AbstractDetection:
         return data
 
     @staticmethod
-    def _multimedfilt(data: np.array, kernel_size: int, times: int = 1) -> np.array:
+    def _multimedfilt(data: np.array, kernel_size: int = 5, times: int = 10) -> np.array:
         """
         对数据进行多次中值滤波，须为一或二维
         Args:
-            data: 数据
+            data: 输入数据
             kernel_size: 中值滤波核大小
-            times: 滤波次数，默认为1
+            times: 滤波次数
 
-        Returns: 数据
+        Returns: 中值滤波后的数据
 
         """
         if len(data.shape) == 1:
@@ -140,13 +157,13 @@ class AbstractDetection:
         """
         数据滤波
         Args:
-            data: 数据
+            data:  输入数据
 
-        Returns: 数据
+        Returns: 滤波后的数据
 
         """
         data = self._detrend_data(data=data)
-        data = self._multimedfilt(data=data, kernel_size=5)
+        data = self._multimedfilt(data=data, kernel_size=3, times=1)
         return data
 
     def _read_data(self) -> np.array:
@@ -155,12 +172,13 @@ class AbstractDetection:
         Returns: 数据
 
         """
-        raw_data = np.fromfile(self.data_list[0], dtype="<f4")
+        raw_data = np.fromfile(self.file_path[0], dtype="<f4")
         self.sampling_rate = int(raw_data[6])
         self.sampling_times = int(raw_data[7])
         self.channels_num = int(raw_data[9])
+
         data = []
-        for file in self.data_list:
+        for file in self.file_path:
             raw_data = np.fromfile(file, dtype="<f4")
             data.append(raw_data[10:].reshape(self.channels_num, self.sampling_times))
         return np.concatenate(data, axis=1)
@@ -171,26 +189,31 @@ class AbstractDetection:
         Returns:
 
         """
-        data = []
-        for noise in self.noise_list:
-            raw_data = np.fromfile(noise, dtype="<f4")
-            sampling_rate = int(raw_data[6])
-            if sampling_rate != self.sampling_rate:
-                printError(
-                    f"noise file {noise} has sampling rate: {sampling_rate}, while data files have {self.sampling_rate}"
-                )
-            sampling_times = int(raw_data[7])
-            if sampling_times != self.sampling_times:
-                printError(
-                    f"noise file {noise} has sampling times: {sampling_times}, while data files have {self.sampling_times}"
-                )
-            channels_num = int(raw_data[9])
-            if channels_num != self.channels_num:
-                printError(
-                    f"noise file {noise} has sampling times: {channels_num}, while data files have {self.channels_num}"
-                )
-            data.append(raw_data[10:].reshape(channels_num, sampling_times))
-        return np.concatenate(data, axis=1)
+        raw_data = np.fromfile(self.noise, dtype="<f4")
+        sampling_rate = int(raw_data[6])
+        if sampling_rate != self.sampling_rate:
+            printError(
+                f"noise file {self.noise} has sampling rate: {sampling_rate}, while data files have {self.sampling_rate}"
+            )
+        sampling_times = int(raw_data[7])
+        if sampling_times != self.sampling_times:
+            printError(
+                f"noise file {self.noise} has sampling times: {sampling_times}, while data files have {self.sampling_times}"
+            )
+        channels_num = int(raw_data[9])
+        if channels_num != self.channels_num:
+            printError(
+                f"noise file {self.noise} has sampling times: {channels_num}, while data files have {self.channels_num}"
+            )
+        return raw_data[10:].reshape(channels_num, sampling_times)
+
+    def _concat_data(self) -> None:
+        """
+        合并噪声段和待检测信号段
+        Returns:
+
+        """
+        self.data = np.concatenate([self.noise_data, self.data], axis=1)
 
     def _windows(self) -> np.array:
         """
@@ -274,11 +297,11 @@ class AbstractDetection:
 
         """
         endpoint_threshold = self.endpoint_threshold[channel_number]
-        for index in indices:
-            while index[0] > self.no_signal_frames_num and feature[index[0]] >= endpoint_threshold:
-                index[0] -= 1
-            while index[1] < len(self.frames) - 1 and feature[index[1]] >= endpoint_threshold:
-                index[1] += 1
+        for start, end in indices:
+            while start > self.no_signal_frames_num and feature[start] >= endpoint_threshold:
+                start -= 1
+            while end < self.frames_num - 1 and feature[end] >= endpoint_threshold:
+                end += 1
         return indices
 
     @staticmethod
@@ -297,8 +320,7 @@ class AbstractDetection:
             if not combined_indices or combined_indices[-1][1] < index[0]:
                 combined_indices.append(index)
             else:
-                combined_indices[-1][1] = max(combined_indices[-1][1], index[1])
-
+                combined_indices[-1][1] = combined_indices[-1][1] if combined_indices[-1][1] > index[1] else index[1]
         return combined_indices
 
     def _check_signal_length(self, indices: List) -> List:
@@ -312,7 +334,7 @@ class AbstractDetection:
         """
         res = []
         for index in indices:
-            if index[1] - index[0] >= self.minimum_signal_length * self.sampling_rate:
+            if index[1] - index[0] >= self.minimal_signal_length * self.sampling_rate:
                 res.append(index)
         return res
 
@@ -327,10 +349,10 @@ class AbstractDetection:
         """
         indices = []
         if signal_frame_indices:
-            for index in signal_frame_indices:
-                begin, end = self.frame_indices[index[0]], self.frame_indices[index[1]] + self.frame_length
-                if begin < self.sampling_times * self.noise_num:
-                    begin = self.sampling_times * self.noise_num
+            for start, end in signal_frame_indices:
+                begin, end = self.frame_indices[start], self.frame_indices[end] + self.frame_length
+                if begin <= self.sampling_times:
+                    begin = self.sampling_times
                 if end >= self.total_sampling_times:
                     end = self.total_sampling_times - 1
                 indices.append([begin, end])
@@ -350,9 +372,9 @@ class AbstractDetection:
         """
         channel_number = [int(x) for x in channel_number.split(' ') if x]
         if not channel_number:
-            channel_number = [i for i in range(1, self.channels_num + 1)]
+            channel_number = [*range(1, self.channels_num + 1)]
         elif len(channel_number) > 1:
-            channel_number = [i for i in range(channel_number[0], channel_number[-1] + 1)]
+            channel_number = [*range(channel_number[0], channel_number[-1] + 1)]
         self.search_channels = channel_number
 
     def _update_signals(self, data: np.array, channel_number: int, indices: List) -> None:
@@ -428,15 +450,15 @@ class AbstractDetection:
 
         """
         l, r = index
-        l -= self.noise_num * self.sampling_times
-        r -= self.noise_num * self.sampling_times
+        l -= self.sampling_times
+        r -= self.sampling_times
         fstart, fend = l // self.sampling_times, r // self.sampling_times
         tbegin, tend = l / self.sampling_rate, r / self.sampling_rate
 
         if fstart == fend:  # 处于一个文件
-            saving_name = f"{self.data_name[fstart]}_time={tbegin}s_to_{tend}s_channel={channel}"
+            saving_name = f"{self.file_name[fstart]}_time={tbegin}s_to_{tend}s_channel={channel}"
         else:
-            saving_name = f"{self.data_name[fstart]}_to_{self.data_name[fend]}_time={tbegin}s_to_{tend}s_channel={channel}"
+            saving_name = f"{self.file_name[fstart]}_to_{self.file_name[fend]}_time={tbegin}s_to_{tend}s_channel={channel}"
         return saving_name
 
     def _get_saving_name(self, channel: int, indices: List) -> List:
@@ -528,25 +550,42 @@ class AbstractDetection:
         ax = plt.gca()
         ax.imshow(self.data, cmap="viridis", aspect="auto", vmin=0, vmax=1)
         ax.invert_yaxis()
+        hd = []
         for channel in self.signal_channels:
-            for index in self.signal_indices[channel]:
-                sc = ax.scatter(x=[index[0] + 1, index[1] + 1], y=[channel, channel], s=10, c="g")
-                hl = ax.hlines(y=channel, xmin=index[0] + 1, xmax=index[1] + 1, colors="r", alpha=0.3)
+            points_x = np.array(self.signal_indices[channel]).flatten() + 1
+            n = len(points_x)
+            hd.append(ax.scatter(x=points_x, y=[channel] * n, s=10, c="g"))
+            hd.append(ax.hlines(y=[channel] * (n // 2), xmin=points_x[::2], xmax=points_x[1::2], colors="r", alpha=0.3))
         ax.set_xlim(0, self.total_sampling_times)
         ax.set_xticks(ticks=plt.xticks()[0], labels=plt.xticks()[0] / self.sampling_rate)
         ax.set_xlabel("时间（秒）")
         ax.set_ylim(0, self.channels_num)
         ax.set_ylabel("通道")
-        ax.legend(handles=[sc, hl], labels=["信号端点", "信号"], loc="lower right")
+        ax.legend(handles=hd, labels=["信号端点", "信号"], loc="lower right")
         ax.set_title(f"信号数量 {self.signals_num}")
         return figure_widget
 
 
-class Energy(AbstractDetection):
-    """基于短时能量的双门限法"""
+class Energy(Base):
+    """基于短时能量"""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self,
+                 signal_threshold_ratio: float = 5.,
+                 endpoint_threshold_ratio: float = 3.,
+                 *args,
+                 **kwargs) -> None:
+        """
+
+        Args:
+            signal_threshold_ratio:  信号短时能量与噪声段短时能量均值的比，短时能量大于于该值时认为是信号
+            endpoint_threshold_ratio:  信号端点短时能量与噪声段短时能量均值的比，短时能量小于该值时认为是信号端点
+            *args:
+            **kwargs:
+        """
+        super().__init__(signal_threshold_ratio=signal_threshold_ratio,
+                         endpoint_threshold_ratio=endpoint_threshold_ratio,
+                         *args,
+                         **kwargs)
 
     def _get_feature(self, channel_number: int) -> None:
         """
@@ -561,66 +600,96 @@ class Energy(AbstractDetection):
         for frame in self.frames:
             short_time_energy.append(np.sum(frame ** 2))
 
-        self.feature[channel_number] = self._multimedfilt(np.array(short_time_energy), kernel_size=5, times=10)
+        self.feature[channel_number] = self._multimedfilt(np.array(short_time_energy))
         self.signal_threshold[channel_number] = np.mean(
             self.feature[channel_number][:self.no_signal_frames_num]) * self.signal_threshold_ratio
         self.endpoint_threshold[channel_number] = np.mean(
-            self.feature[channel_number][:self.no_signal_frames_num]) * self.signal_endpoints_threshold_ratio
+            self.feature[channel_number][:self.no_signal_frames_num]) * self.endpoint_threshold_ratio
 
 
-class AutoCorrelationMaximum(AbstractDetection):
-    """基于自相关函数的双门限法"""
+class AutoCorrelationMaximum(Base):
+    """基于自相关函数"""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self,
+                 signal_threshold_ratio: float = 1.5,
+                 endpoint_threshold_ratio: float = 1.2,
+                 *args,
+                 **kwargs) -> None:
+        """
 
-    def _get_feature(self, channel_number: int) -> np.array:
+        Args:
+            signal_threshold_ratio:  信号自相关系数阈值与噪声段自相关系数最大值的比，自相关系数大于该值时认为是信号
+            endpoint_threshold_ratio:  信号端点自相关系数阈值与噪声段自相关系数最大值的比，自相关系数小于该值时认为是信号端点
+            *args:
+            **kwargs:
+        """
+        super().__init__(signal_threshold_ratio=signal_threshold_ratio,
+                         endpoint_threshold_ratio=endpoint_threshold_ratio,
+                         *args,
+                         **kwargs)
+
+    def _get_feature(self, channel_number: int) -> None:
         """
         计算分帧后的自相关函数
         Args:
-            channel_number: 通道号
+            channel_number:
 
         Returns:
 
         """
         corr = []
         for frame in self.frames:
-            corr.append(np.max(correlate(frame, frame, mode='full')))
+            corr.append(np.max(correlate(frame, frame, mode="full")))
 
-        self.feature[channel_number] = self._multimedfilt(np.array(corr), kernel_size=5, times=10)
+        self.feature[channel_number] = self._multimedfilt(np.array(corr))
         self.signal_threshold[channel_number] = np.max(
             self.feature[channel_number][:self.no_signal_frames_num]) * self.signal_threshold_ratio
         self.endpoint_threshold[channel_number] = np.max(
-            self.feature[channel_number][:self.no_signal_frames_num]) * self.signal_endpoints_threshold_ratio
+            self.feature[channel_number][:self.no_signal_frames_num]) * self.endpoint_threshold_ratio
 
 
-class CrossCorrelationMaximum(AbstractDetection):
-    """基于互相关函数的双门限法"""
+class CrossCorrelationMaximum(Base):
+    """基于互相关函数"""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self,
+                 signal_threshold_ratio: float = 1.5,
+                 endpoint_threshold_ratio: float = 1.2,
+                 *args,
+                 **kwargs) -> None:
+        """
 
-    def _get_feature(self, channel_number: int) -> np.array:
+        Args:
+            signal_threshold_ratio:  信号互相关系数阈值与噪声段自相关系数最大值的比，互相关系数大于该值时认为是信号
+            endpoint_threshold_ratio:  信号端点互相关系数阈值与噪声段自相关系数最大值的比，互相关系数小于该值时认为是信号端点
+            *args:
+            **kwargs:
+        """
+        super().__init__(signal_threshold_ratio=signal_threshold_ratio,
+                         endpoint_threshold_ratio=endpoint_threshold_ratio,
+                         *args,
+                         **kwargs)
+
+    def _get_feature(self, channel_number: int) -> None:
         """
         计算分帧后的互相关函数
         Args:
-            channel_number: 
+            channel_number: 通道号
 
         Returns:
 
         """
         corr = [0]
         for i in range(1, len(self.frames)):
-            corr.append(np.max(correlate(self.frames[i - 1], self.frames[i], mode='full')))
+            corr.append(np.max(correlate(self.frames[i - 1], self.frames[i], mode="full")))
 
-        self.feature[channel_number] = self._multimedfilt(np.array(corr), kernel_size=5, times=10)
+        self.feature[channel_number] = self._multimedfilt(np.array(corr))
         self.signal_threshold[channel_number] = np.max(
             self.feature[channel_number][:self.no_signal_frames_num]) * self.signal_threshold_ratio
         self.endpoint_threshold[channel_number] = np.max(
-            self.feature[channel_number][:self.no_signal_frames_num]) * self.signal_endpoints_threshold_ratio
+            self.feature[channel_number][:self.no_signal_frames_num]) * self.endpoint_threshold_ratio
 
 
-class DataSifting(QWidget):
+class DataSifting:
     """双门限法滤波"""
 
     def __init__(self, parent):
@@ -629,26 +698,25 @@ class DataSifting(QWidget):
         Args:
             parent: 父级，为主窗口，为显示结果用
         """
-        super().__init__(parent)
+        self.parent = parent
         self.methods = {
             '能量（均值）': Energy,
             '自相关函数（最大值）': AutoCorrelationMaximum,
             '互相关函数（最大值）': CrossCorrelationMaximum,
         }
-
-        self.noise_list = []
+        self.noise = None
         self.data_list = []
 
-        self.save_path = ''
+        self.save_path = str(Path.cwd())
         self.save_signals = True
         self.show_result = True
 
         self.feature_index = 0
         self.signal_threshold = 5.
-        self.signal_endpoints_threshold = 3.
+        self.endpoint_threshold = 3.
 
         self.search_channels = ''
-        self.minimum_signal_length = 1.
+        self.minimal_signal_length = 1.
         self.signal_interval = 0.5
 
         self.window_index = 6
@@ -659,8 +727,8 @@ class DataSifting(QWidget):
                         'Modified Barrtlett-Hann': barthann, 'Nuttall': nuttall, 'Parzen': parzen,
                         'Rectangular / Dirichlet': boxcar, 'Taylor': taylor, 'Triangular': triang,
                         'Tukey / Tapered Cosine': tukey}
-        self.frame_length = 256
-        self.frame_shift = 192
+        self.frame_length = 128
+        self.frame_shift = 96
 
         self.dialog = None
 
@@ -672,12 +740,10 @@ class DataSifting(QWidget):
         Returns:
 
         """
-        file_names = QFileDialog.getOpenFileNames(self.dialog, '选择噪声文件', '', 'DAS data (*.dat)')[0]
-        if file_names:
-            self.dialog.noise_text_edit.clear()
-            self.noise_list = [Path(x) for x in file_names]
-            for name in file_names:
-                self.dialog.noise_text_edit.append(name)
+        file_name = QFileDialog.getOpenFileName(self.dialog, '选择噪声文件', '', 'DAS data (*.dat)')[0]
+        if file_name:
+            self.noise = Path(file_name)
+            self.dialog.noise_text_edit.setText(file_name)
 
     def selectData(self):
         """
@@ -710,18 +776,17 @@ class DataSifting(QWidget):
 
         """
         method = self.dialog.feature_combobox.currentText()
-        obj = self.methods[method]()
-        obj.noise_list = self.noise_list
-        obj.data_list = self.data_list
-        obj.signal_threshold_ratio = self.signal_threshold
-        obj.signal_endpoints_threshold_ratio = self.signal_endpoints_threshold
-        obj.minimum_signal_length = self.minimum_signal_length
-        obj.signal_interval = self.signal_interval
-        obj.window_func = self.windows[self.window]
-        obj.frame_length = self.frame_length
-        obj.frame_shift = self.frame_shift
-        obj.init_params()
-
+        obj = self.methods[method](
+            noise=Path(self.noise),
+            file_path=self.data_list,
+            signal_threshold_ratio=self.signal_threshold,
+            endpoint_threshold_ratio=self.endpoint_threshold,
+            minimal_signal_length=self.minimal_signal_length,
+            signal_interval=self.signal_interval,
+            window_func=self.windows[self.window],
+            frame_length=self.frame_length,
+            frame_shift=self.frame_shift
+        )
         obj.search(self.search_channels)
 
         if not obj.signals_num:
@@ -738,9 +803,9 @@ class DataSifting(QWidget):
                     figure_widget = obj.plot_single_channel()
                 else:
                     figure_widget = obj.plot_heatmap()
-                self.parentWidget().tab_widget.addTab(figure_widget, f'{method}筛选结果：'
-                                                                     f'信号阈值={self.signal_threshold}\t'
-                                                                     f'信号端点阈值={self.signal_endpoints_threshold}')
+                self.parent.tab_widget.addTab(figure_widget, f'{method}筛选结果：'
+                                                             f'信号阈值={self.signal_threshold}\t'
+                                                             f'信号端点阈值={self.endpoint_threshold}')
 
     def initDialogLayout(self):
         """
@@ -782,9 +847,9 @@ class DataSifting(QWidget):
         self.dialog.signal_threshold_line_edit = LineEditWithReg(digit=True)
         self.dialog.signal_threshold_line_edit.setToolTip('信号特征阈值与噪声段特征的比')
 
-        signal_endpoints_threshold_label = Label('信号端点阈值')
-        self.dialog.signal_endpoints_threshold_line_edit = LineEditWithReg(digit=True)
-        self.dialog.signal_endpoints_threshold_line_edit.setToolTip('信号端点特征阈值与噪声段特征的比')
+        endpoint_threshold_label = Label('信号端点阈值')
+        self.dialog.endpoint_threshold_line_edit = LineEditWithReg(digit=True)
+        self.dialog.endpoint_threshold_line_edit.setToolTip('信号端点特征阈值与噪声段特征的比')
 
         search_channels_label = Label('搜索通道')
         search_channels_label.setToolTip('')
@@ -792,9 +857,9 @@ class DataSifting(QWidget):
         self.dialog.search_channels_line_edit.setToolTip(
             '要搜索的通道号，不填表示搜索全部；单个通道号表示指定通道；两个通道号表示搜索介于二者区间的所有通道，应以空格分隔')
 
-        minimum_signal_length_label = Label('最小信号长度（秒）')
-        self.dialog.minimum_signal_length_line_edit = LineEditWithReg(digit=True)
-        self.dialog.minimum_signal_length_line_edit.setToolTip('信号最短长度，信号长度小于该值会被舍去')
+        minimal_signal_length_label = Label('最小信号长度（秒）')
+        self.dialog.minimal_signal_length_line_edit = LineEditWithReg(digit=True)
+        self.dialog.minimal_signal_length_line_edit.setToolTip('信号最短长度，信号长度小于该值会被舍去')
 
         signal_interval_label = Label('信号间隔（秒）')
         self.dialog.signal_interval_line_edit = LineEditWithReg(digit=True)
@@ -861,14 +926,14 @@ class DataSifting(QWidget):
         threshold_hbox.addWidget(signal_threshold_label)
         threshold_hbox.addWidget(self.dialog.signal_threshold_line_edit)
         threshold_hbox.addSpacing(5)
-        threshold_hbox.addWidget(signal_endpoints_threshold_label)
-        threshold_hbox.addWidget(self.dialog.signal_endpoints_threshold_line_edit)
+        threshold_hbox.addWidget(endpoint_threshold_label)
+        threshold_hbox.addWidget(self.dialog.endpoint_threshold_line_edit)
         threshold_hbox.addSpacing(5)
         threshold_hbox.addWidget(search_channels_label)
         threshold_hbox.addWidget(self.dialog.search_channels_line_edit)
 
-        params_hbox.addWidget(minimum_signal_length_label)
-        params_hbox.addWidget(self.dialog.minimum_signal_length_line_edit)
+        params_hbox.addWidget(minimal_signal_length_label)
+        params_hbox.addWidget(self.dialog.minimal_signal_length_line_edit)
         params_hbox.addSpacing(5)
         params_hbox.addWidget(signal_interval_label)
         params_hbox.addWidget(self.dialog.signal_interval_line_edit)
@@ -905,9 +970,9 @@ class DataSifting(QWidget):
         self.show_result = self.dialog.show_result_checkbox.isChecked()
         self.feature_index = self.dialog.feature_combobox.currentIndex()
         self.signal_threshold = float(self.dialog.signal_threshold_line_edit.text())
-        self.signal_endpoints_threshold = float(self.dialog.signal_endpoints_threshold_line_edit.text())
+        self.endpoint_threshold = float(self.dialog.endpoint_threshold_line_edit.text())
         self.search_channels = self.dialog.search_channels_line_edit.text()
-        self.minimum_signal_length = float(self.dialog.minimum_signal_length_line_edit.text())
+        self.minimal_signal_length = float(self.dialog.minimal_signal_length_line_edit.text())
         self.signal_interval = float(self.dialog.signal_interval_line_edit.text())
         self.window_index = self.dialog.window_combobox.currentIndex()
         self.window = self.dialog.window_combobox.currentText()
@@ -925,9 +990,9 @@ class DataSifting(QWidget):
         self.dialog.show_result_checkbox.setChecked(self.show_result)
         self.dialog.feature_combobox.setCurrentIndex(self.feature_index)
         self.dialog.signal_threshold_line_edit.setText(str(self.signal_threshold))
-        self.dialog.signal_endpoints_threshold_line_edit.setText(str(self.signal_endpoints_threshold))
+        self.dialog.endpoint_threshold_line_edit.setText(str(self.endpoint_threshold))
         self.dialog.search_channels_line_edit.setText(self.search_channels)
-        self.dialog.minimum_signal_length_line_edit.setText(str(self.minimum_signal_length))
+        self.dialog.minimal_signal_length_line_edit.setText(str(self.minimal_signal_length))
         self.dialog.signal_interval_line_edit.setText(str(self.signal_interval))
         self.dialog.window_combobox.setCurrentIndex(self.window_index)
         self.dialog.frame_length_line_edit.setText(str(self.frame_length))
