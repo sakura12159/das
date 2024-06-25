@@ -74,6 +74,7 @@ class Base:
         self.noise_data = self._filter_data(data=self._read_noise())
         self._concat_data()
 
+        self.time_length = self.sampling_times // self.sampling_rate
         self.total_sampling_times = (len(self.file_path) + 1) * self.sampling_times
 
         self.minimal_signal_length = minimal_signal_length
@@ -439,12 +440,12 @@ class Base:
             self._search(channel_number=channel)
         self._update_signals_num()
 
-    def _get_index_saving_name(self, index: List, channel: int) -> str:
+    def _get_index_saving_name(self, index: List, channel_number: int) -> str:
         """
         获取单对信号索引的储存名称，包含所在文件起始、时间以及通道号
         Args:
             index: 单个信号索引对
-            channel: 信号所在通道号
+            channel_number: 信号所在通道号
 
         Returns: 单个信号对应的储存名称
 
@@ -452,20 +453,22 @@ class Base:
         l, r = index
         l -= self.sampling_times
         r -= self.sampling_times
-        fstart, fend = l // self.sampling_times, r // self.sampling_times
-        tbegin, tend = l / self.sampling_rate, r / self.sampling_rate
+        fstart = l // self.sampling_times
+        fend = r // self.sampling_times
+        tbegin = l / self.sampling_rate - fstart * self.time_length
+        tend = r / self.sampling_rate - fstart * self.time_length
 
         if fstart == fend:  # 处于一个文件
-            saving_name = f"{self.file_name[fstart]}_time={tbegin}s_to_{tend}s_channel={channel}"
+            saving_name = f"{self.file_name[fstart]}_time={tbegin:.3f}s_to_{tend:.3f}s_channel={channel_number}"
         else:
-            saving_name = f"{self.file_name[fstart]}_to_{self.file_name[fend]}_time={tbegin}s_to_{tend}s_channel={channel}"
+            saving_name = f"{self.file_name[fstart]}_to_{self.file_name[fend]}_time={tbegin:.3f}s_to_{tend:.3f}s_channel={channel_number}"
         return saving_name
 
-    def _get_saving_name(self, channel: int, indices: List) -> List:
+    def _get_saving_name(self, channel_number: int, indices: List) -> List:
         """
         获取单通道所有信号的储存文件名
         Args:
-            channel: 通道号
+            channel_number: 通道号
             indices: 包含表示信号索引对的List
 
         Returns: 该通道所有信号的储存文件名
@@ -473,7 +476,7 @@ class Base:
         """
         saving_name = []
         for index in indices:
-            saving_name.append(self._get_index_saving_name(index=index, channel=channel))
+            saving_name.append(self._get_index_saving_name(index=index, channel_number=channel_number))
         return saving_name
 
     def _get_saving_names(self) -> None:
@@ -483,7 +486,7 @@ class Base:
 
         """
         for key, value in self.signal_indices.items():
-            self.saving_names[key] = self._get_saving_name(channel=key, indices=value)
+            self.saving_names[key] = self._get_saving_name(channel_number=key, indices=value)
 
     def _save(self, save_path: str) -> None:
         """

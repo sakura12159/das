@@ -110,6 +110,9 @@ class MainWindow(QMainWindow):
         # 操作
         self.operation_menu = Menu('操作', self.menu_bar, enabled=False)
 
+        self.show_all_params_action = Action('显示所有参数', self.operation_menu, '显示当前文件的所有参数',
+                                             self.showAllParams)
+
         # 操作-计算信噪比
         self.calculate_snr_action = Action('计算信噪比', self.operation_menu, '计算选中数据的信噪比',
                                            self.calculateSNRDialog)
@@ -284,12 +287,12 @@ class MainWindow(QMainWindow):
         self.wavelet_packets_action = Action('小波包', self.wavelet_menu, '使用小波包进行数据分解并从选择的节点重构',
                                              self.waveletPacketsDialog)
 
-        # 其他
-        self.others_menu = Menu('其他', self.menu_bar, enabled=True)
-
-        # 其他-数据筛选
-        self.data_sifting_action = Action('数据筛选', self.others_menu, '使用双门限法筛选数据',
-                                          self.dataSiftingDialog)
+        # # 其他
+        # self.others_menu = Menu('其他', self.menu_bar, enabled=True)
+        #
+        # # 其他-数据筛选
+        # self.data_sifting_action = Action('数据筛选', self.others_menu, '使用双门限法筛选数据',
+        #                                   self.dataSiftingDialog)
 
     def initLayout(self):
         """初始化主窗口布局"""
@@ -761,22 +764,88 @@ class MainWindow(QMainWindow):
     def readData(self):
         """读取数据，更新参数"""
         raw_data = np.fromfile(os.path.join(self.file_path, self.file_names[0]), dtype='<f4')
-        self.sampling_rate = int(raw_data[6])  # 采样率
-        self.single_sampling_times = int(raw_data[7])  # 采样次数
-        self.channels_num = int(raw_data[9])  # 通道数
+        self.sampling_rate = int(raw_data[10])  # 采样率
+        self.channels_num = int(raw_data[16])  # 通道数
+
+        acquisition_modes = {
+            1.: 'CNTE 连续模式',
+            2.: 'PTRI 预触发模式',
+            3.: 'WTRI 等待触发模式'
+        }
+
+        fiber_types = {
+            1.: 'SMF 单模光纤',
+            2.: 'MMF 多模光纤',
+            3.: 'MSF 微结构光纤'
+        }
+
+        acquisition_mode = raw_data[6]  # 采集模式
+        fiber_type = raw_data[7]  # 光纤类型
+        physical_fiber_length = raw_data[8]  # 光纤长度，m
+        refractive_index = raw_data[9]  # 反射率
+        pulse_width = raw_data[11]  # 脉冲宽度，ns
+        gauge_length = raw_data[12]  # 道间距，m
+        spatial_resolution = raw_data[13]  # 空间分辨率，m
+        start_distance = raw_data[14]  # 开始位置，m
+        stop_distance = raw_data[15]  # 结束位置，m
+        sensor_number = raw_data[16]  # 传感点数
+        sampling_time = raw_data[17]  # 连续采集时间，即一个文件时长，s
+        p = raw_data[18]  # P 系数
+        time_decimation = raw_data[19]  # 时间系数
+        number = raw_data[20]  # 滑动系数
+        window = raw_data[21]  # 窗类型
+        cutoff = raw_data[22]  # 截止阈值
+        gain1 = raw_data[23]  # 增益 1
+        gain2 = raw_data[24]  # 增益 2
+        optical_power = raw_data[25]  # 光功率
+        scan_threshold = raw_data[26]  # 扫描阈值
+        trigger_level = raw_data[27]  # 触发脉宽阈值，ns
+        acquisition_time = raw_data[28]  # 触发采集时间，s
+        trigger_interval = raw_data[29]  # 触发间隔，s
 
         time, data = [], []
         for file in self.file_names:
             raw_data = np.fromfile(os.path.join(self.file_path, file), dtype='<f4')
-
             time.append(raw_data[:6])  # GPS时间
-            data.append(raw_data[10:].reshape(self.channels_num, self.single_sampling_times))
+            data.append(raw_data[64:].reshape(self.channels_num, -1, order='F'))
 
         self.time = time
         self.data = np.concatenate(data, axis=1)  # （通道数，采样次数）
+        self.sampling_times = self.data.shape[1]
         # self.data = filterData(self.data)
-        self.sampling_times = self.single_sampling_times * len(self.file_names)
         self.origin_data = self.data
+
+        def f(s):
+            return list(map(str, map(int, s[:5]))) + [str(s[5])]
+
+        self.all_params = {
+            'GPS时间': f'{"-".join(f(self.time[0]))} 至 {"-".join(f(self.time[-1]))}',
+            '采集模式': f'{acquisition_modes[acquisition_mode]}',
+            '光纤类型': f'{fiber_types[fiber_type]}',
+            '光纤长度': f'{physical_fiber_length:.3f}m',
+            '反射率': f'{refractive_index:.3f}',
+            '采样频率': f'{self.sampling_rate}Hz',
+            '脉冲宽度': f'{pulse_width}ns',
+            '道间距': f'{gauge_length}m',
+            '空间分辨率': f'{spatial_resolution:.3f}m',
+            '测量开始位置': f'{start_distance:.3f}m',
+            '测量结束位置': f'{stop_distance:.3f}m',
+            '传感点数（通道数）': f'{sensor_number}',
+            '单个文件时长': f'{sampling_time}s',
+            '计算系数 P': f'{p}',
+            '降采样时间系数': f'{time_decimation}',
+            '窗口滑动平均系数': f'{number}',
+            '窗类型': f'{window}',
+            '截止阈值': f'{cutoff:.3f}',
+            '接受增益 1': f'{gain1}',
+            '接受增益 2': f'{gain2}',
+            '输出光功率': f'{optical_power}',
+            '微结构扫描阈值': f'{scan_threshold}',
+            '触发采集模式脉冲阈值': f'{trigger_level}ns',
+            '触发采集模式采集间隔': f'{trigger_interval:.3f}s',
+            '等待出发采集模式采集时间': f'{acquisition_time}s',
+            '总采样点数': f'{self.sampling_times}'
+        }
 
     # """------------------------------------------------------------------------------------------------------------"""
     """文件-导出调用函数"""
@@ -798,6 +867,26 @@ class MainWindow(QMainWindow):
             data.to_json(fpath, orient='values')
         elif ftype.find('*.pickle') > 0:
             data.to_pickle(fpath)
+
+    # """------------------------------------------------------------------------------------------------------------"""
+    """显示所有参数"""
+
+    def showAllParams(self):
+        dialog = Dialog()
+        dialog.resize(450, 650)
+        text_edit = TextEdit()
+        for k, v in self.all_params.items():
+            text_edit.append(f'{k}: {v}')
+        btn = PushButton('确定')
+        btn.clicked.connect(dialog.close)
+
+        vbox = QVBoxLayout()
+        vbox.addWidget(text_edit)
+        vbox.addSpacing(5)
+        vbox.addWidget(btn)
+
+        dialog.setLayout(vbox)
+        dialog.exec_()
 
     # """------------------------------------------------------------------------------------------------------------"""
     """计算信噪比调用函数"""
@@ -1194,7 +1283,8 @@ class MainWindow(QMainWindow):
         """绘制多通道云图"""
         plot_widget = MyPlotWidget('多通道云图', '时间（s）', '通道', check_mouse=False)
         x = self.xAxis()
-        colors = cycle(['red', 'lime', 'deepskyblue', 'yellow', 'plum', 'gold', 'blue', 'fuchsia', 'aqua', 'orange'])
+        colors = cycle(
+            ['red', 'lime', 'deepskyblue', 'yellow', 'plum', 'gold', 'blue', 'fuchsia', 'aqua', 'orange'])
         for i in range(1, self.current_channels + 1):
             plot_widget.draw(x, self.data[i - 1] + i, pen=QColor(next(colors)))  # 根据通道数个位选择颜色绘图
         self.tab_widget.addTab(plot_widget, '多通道云图')
@@ -1237,7 +1327,8 @@ class MainWindow(QMainWindow):
         ax = plt.gca()
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
-                                nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
+                                nperseg=self.window_length, noverlap=self.window_overlap_size,
+                                nfft=self.window_length,
                                 scaling='density', mode='psd')
         plt.pcolormesh(t, f, 20.0 * np.log10(Sxx + 1e-5), cmap='viridis')
         plt.colorbar(label='功率/频率（dB/Hz）')
@@ -1257,7 +1348,8 @@ class MainWindow(QMainWindow):
         ax = figure.add_subplot(projection='3d')
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
-                                nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
+                                nperseg=self.window_length, noverlap=self.window_overlap_size,
+                                nfft=self.window_length,
                                 scaling='density', mode='psd')
         im = ax.plot_surface(f[:, None], t[None, :], 20.0 * np.log10(Sxx + 1e-5), cmap='viridis')
         plt.colorbar(im, ax=ax, label='功率/频率（dB/Hz）', pad=0.2)
@@ -1293,7 +1385,8 @@ class MainWindow(QMainWindow):
         ax = plt.gca()
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
-                                nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
+                                nperseg=self.window_length, noverlap=self.window_overlap_size,
+                                nfft=self.window_length,
                                 scaling='spectrum', mode='magnitude')
         plt.pcolormesh(t, f, 20.0 * np.log10(Sxx + 1e-5), cmap='viridis')
         plt.colorbar(label='幅度（dB）')
@@ -1313,7 +1406,8 @@ class MainWindow(QMainWindow):
         ax = figure.add_subplot(projection='3d')
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
-                                nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
+                                nperseg=self.window_length, noverlap=self.window_overlap_size,
+                                nfft=self.window_length,
                                 scaling='spectrum', mode='magnitude')
         im = ax.plot_surface(f[:, None], t[None, :], 20.0 * np.log10(Sxx + 1e-5), cmap='viridis')
         plt.colorbar(im, ax=ax, label='幅度（dB）', pad=0.2)
@@ -1345,7 +1439,8 @@ class MainWindow(QMainWindow):
         ax = plt.gca()
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
-                                nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
+                                nperseg=self.window_length, noverlap=self.window_overlap_size,
+                                nfft=self.window_length,
                                 scaling='spectrum', mode='angle')
         plt.pcolormesh(t, f, Sxx, cmap='viridis')
         plt.colorbar(label='角度（rad）')
@@ -1365,7 +1460,8 @@ class MainWindow(QMainWindow):
         ax = figure.add_subplot(projection='3d')
         ax.tick_params(axis='both', which='both', direction='in')
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
-                                nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
+                                nperseg=self.window_length, noverlap=self.window_overlap_size,
+                                nfft=self.window_length,
                                 scaling='spectrum', mode='angle')
         im = ax.plot_surface(f[:, None], t[None, :], Sxx, cmap='viridis')
         plt.colorbar(im, ax=ax, label='角度（rad）', pad=0.2)
@@ -1608,7 +1704,8 @@ class MainWindow(QMainWindow):
         ceemdan_total_power_thr_label = Label('总功率阈值')
         self.ceemdan_total_power_thr_line_edit = LineEditWithReg(digit=True)
         self.ceemdan_total_power_thr_line_edit.setText(str(self.ceemdan_total_power_thr))
-        self.ceemdan_total_power_thr_line_edit.setToolTip('用于IMF分解检查，如果信号总功率小于总功率阈值，则认为分解完成')
+        self.ceemdan_total_power_thr_line_edit.setToolTip(
+            '用于IMF分解检查，如果信号总功率小于总功率阈值，则认为分解完成')
 
         btn = PushButton('确定')
         btn.clicked.connect(self.updateEMDParams)
@@ -1763,7 +1860,8 @@ class MainWindow(QMainWindow):
         wavelet_dwt_reconstruct_label = Label('重构系数')
         self.wavelet_dwt_reconstruct_line_edit = LineEdit()
         self.wavelet_dwt_reconstruct_line_edit.setFixedWidth(500)
-        self.wavelet_dwt_reconstruct_line_edit.setToolTip('选择cAn和cDn系数进行重构，cAn为近似系数，cDn-cD1为细节系数')
+        self.wavelet_dwt_reconstruct_line_edit.setToolTip(
+            '选择cAn和cDn系数进行重构，cAn为近似系数，cDn-cD1为细节系数')
         self.wavelet_dwt_reconstruct_line_edit.setText(str(self.wavelet_dwt_reconstruct))
 
         if not hasattr(self, 'wavelet_dwt_coeffs'):
@@ -1912,7 +2010,8 @@ class MainWindow(QMainWindow):
             pw_time_list, pw_fre_list = [], []
             for i in range(len(coeffs)):
                 if i == 0:
-                    pw_time = MyPlotWidget('离散小波变换分解 - 时域', '', f'cA{self.wavelet_dwt_decompose_level}（rad）')
+                    pw_time = MyPlotWidget('离散小波变换分解 - 时域', '',
+                                           f'cA{self.wavelet_dwt_decompose_level}（rad）')
                     pw_fre = MyPlotWidget('离散小波变换分解 - 频域', '', f'cA{self.wavelet_dwt_decompose_level}')
                 elif i == len(coeffs) - 1:
                     pw_time = MyPlotWidget('', '时间（s）', f'cD1（rad）')
@@ -1941,9 +2040,10 @@ class MainWindow(QMainWindow):
             hbox.addLayout(vbox2)
             wgt.setLayout(hbox)
             scroll_area.setWidget(wgt)
-            self.tab_widget.addTab(scroll_area, f'离散小波变换 - 分解: 分解层数={self.wavelet_dwt_decompose_level}\t'
-                                                f'小波={self.wavelet_dwt_name_combx.currentText()}\t'
-                                                f'通道号={self.channel_number}')
+            self.tab_widget.addTab(scroll_area,
+                                   f'离散小波变换 - 分解: 分解层数={self.wavelet_dwt_decompose_level}\t'
+                                   f'小波={self.wavelet_dwt_name_combx.currentText()}\t'
+                                   f'通道号={self.channel_number}')
         else:
             try:
                 data = pywt.waverec(coeffs, wavelet=self.wavelet_dwt_name_combx.currentText(),
@@ -2072,7 +2172,8 @@ class MainWindow(QMainWindow):
 
         wavelet_packets_decompose_max_level_label = Label('最大分解层数')
         self.wavelet_packets_decompose_max_level_line_edit = LineEditWithReg(focus=False)
-        self.wavelet_packets_decompose_max_level_line_edit.setToolTip('数据的最大分解层数，与数据长度和选择的小波有关')
+        self.wavelet_packets_decompose_max_level_line_edit.setToolTip(
+            '数据的最大分解层数，与数据长度和选择的小波有关')
         self.wavelet_packets_decompose_max_level = pywt.dwt_max_level(self.data.shape[1],
                                                                       self.wavelet_packets_name_combx.currentText())
         self.wavelet_packets_decompose_max_level_line_edit.setText(str(self.wavelet_packets_decompose_max_level))
@@ -2137,7 +2238,8 @@ class MainWindow(QMainWindow):
         wavelet = self.wavelet_packets_name_combx.currentText()
         if wavelet != '':
             self.wavelet_packets_decompose_max_level = pywt.dwt_max_level(self.data.shape[1], wavelet)  # 最大分解层数
-            self.wavelet_packets_decompose_max_level_line_edit.setText(str(self.wavelet_packets_decompose_max_level))
+            self.wavelet_packets_decompose_max_level_line_edit.setText(
+                str(self.wavelet_packets_decompose_max_level))
 
     def updateWaveletPacketsParams(self):
         """更新小波包分解系数"""
@@ -2233,12 +2335,12 @@ class MainWindow(QMainWindow):
             except Exception as err:
                 printError(err)
 
-    # """------------------------------------------------------------------------------------------------------------"""
-    """其他-筛选数据"""
-
-    def dataSiftingDialog(self):
-        if not self.data_sift:
-            self.data_sift = DataSifting(self)
-        self.data_sift.runDialog()
+    # # """------------------------------------------------------------------------------------------------------------"""
+    # """其他-筛选数据"""
+    #
+    # def dataSiftingDialog(self):
+    #     if not self.data_sift:
+    #         self.data_sift = DataSifting(self)
+    #     self.data_sift.runDialog()
 
 # """------------------------------------------------------------------------------------------------------------"""
