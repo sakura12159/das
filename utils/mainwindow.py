@@ -883,7 +883,7 @@ class MainWindow(QMainWindow):
 
         self.noise_channel_number = int(self.noise_channel_number_line_edit.text())
 
-        self.signal_start_sampling_time = int(self.signal_stop_sampling_time_line_edit.text())
+        self.signal_start_sampling_time = int(self.signal_start_sampling_time_line_edit.text())
 
         self.signal_stop_sampling_time = int(self.signal_stop_sampling_time_line_edit.text())
 
@@ -1239,7 +1239,7 @@ class MainWindow(QMainWindow):
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='density', mode='psd')
-        plt.pcolormesh(t, f, 20.0 * np.log10(Sxx + 1e-5), cmap='viridis')
+        plt.pcolormesh(t, f, 20.0 * np.log10(Sxx + 1e-9), cmap='viridis')
         plt.colorbar(label='功率/频率（dB/Hz）')
         plt.title('功率谱密度')
         plt.xlabel('时间（s）')
@@ -1259,7 +1259,7 @@ class MainWindow(QMainWindow):
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='density', mode='psd')
-        im = ax.plot_surface(f[:, None], t[None, :], 20.0 * np.log10(Sxx + 1e-5), cmap='viridis')
+        im = ax.plot_surface(f[:, None], t[None, :], 20.0 * np.log10(Sxx + 1e-9), cmap='viridis')
         plt.colorbar(im, ax=ax, label='功率/频率（dB/Hz）', pad=0.2)
         ax.set_title('三维功率谱密度')
         ax.set_xlabel('频率（Hz）')
@@ -1275,7 +1275,7 @@ class MainWindow(QMainWindow):
         data = self.data[self.channel_number - 1]
         data = self.window_method(self.current_sampling_times) * data
         data = 20.0 * np.log10(
-            np.abs(np.fft.fft(data)[:self.current_sampling_times // 2]) + 1e-5)
+            np.abs(np.fft.fft(data)[:self.current_sampling_times // 2]) + 1e-9)
         plot_widget = MyPlotWidget('幅度谱', '频率（Hz）', '幅度（dB）', grid=True)
         x = self.xAxis(freq=True)
         plot_widget.draw(x, data, pen=QColor('blue'))
@@ -1295,7 +1295,7 @@ class MainWindow(QMainWindow):
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='spectrum', mode='magnitude')
-        plt.pcolormesh(t, f, 20.0 * np.log10(Sxx + 1e-5), cmap='viridis')
+        plt.pcolormesh(t, f, 20.0 * np.log10(Sxx + 1e-9), cmap='viridis')
         plt.colorbar(label='幅度（dB）')
         plt.title('幅度谱')
         plt.xlabel('时间（s）')
@@ -1315,7 +1315,7 @@ class MainWindow(QMainWindow):
         f, t, Sxx = spectrogram(data, self.sampling_rate, window=self.window_method(self.window_length, sym=False),
                                 nperseg=self.window_length, noverlap=self.window_overlap_size, nfft=self.window_length,
                                 scaling='spectrum', mode='magnitude')
-        im = ax.plot_surface(f[:, None], t[None, :], 20.0 * np.log10(Sxx + 1e-5), cmap='viridis')
+        im = ax.plot_surface(f[:, None], t[None, :], 20.0 * np.log10(Sxx + 1e-9), cmap='viridis')
         plt.colorbar(im, ax=ax, label='幅度（dB）', pad=0.2)
         ax.set_title('三维幅度谱')
         ax.set_xlabel('频率（Hz）')
