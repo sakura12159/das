@@ -4,7 +4,7 @@
 @Author  : zxy
 @File    : write.py
 """
-from utils.functions import writeImages
+from utils.function import writeImages
 
 if __name__ == '__main__':
     writeImages('./')

@@ -2,7 +2,7 @@
 """
 @Time    : 2024/6/12 上午9:28
 @Author  : zxy
-@File    : widgets.py
+@File    : widget.py
 """
 from cmath import inf
 
@@ -17,19 +17,30 @@ from PyQt5.QtWidgets import QLineEdit, QLabel, QComboBox, QCheckBox, QPushButton
 
 
 class Menu(QMenu):
-    def __init__(self, title: str, parent: QWidget, status_tip: str = None, enabled: bool = True):
-        super().__init__(title=title, parent=parent)
+    def __init__(self,
+                 parent: QWidget,
+                 title: str,
+                 status_tip: str = None,
+                 enabled: bool = True):
+        super().__init__(parent=parent, title=title)
         self.setStatusTip(status_tip)
         self.setEnabled(enabled)
         parent.addMenu(self)
 
 
 class Action(QAction):
-    def __init__(self, text: str, parent: QWidget, status_tip: str, slot_func: Callable, shortcut: Union[int, str] = 0):
-        super().__init__(text=text, parent=parent)
+    def __init__(self,
+                 parent: QWidget,
+                 text: str,
+                 status_tip: str,
+                 slot_func: Callable,
+                 shortcut: Union[int, str] = 0,
+                 enabled: bool = True):
+        super().__init__(parent=parent, text=text)
         self.setStatusTip(status_tip)
         self.setShortcut(shortcut)
         self.triggered.connect(slot_func)
+        self.setEnabled(enabled)
         parent.addAction(self)
 
 

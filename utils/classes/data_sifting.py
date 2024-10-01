@@ -17,8 +17,8 @@ from numpy import correlate
 from scipy.signal import medfilt, medfilt2d, detrend
 from scipy.signal.windows import *
 
-from ..functions import printError, setPicture
-from ..widgets import Dialog, Label, TextEdit, PushButton, LineEditWithReg, ComboBox, CheckBox
+from ..function import printError, setPicture
+from ..widget import Dialog, Label, TextEdit, PushButton, LineEditWithReg, ComboBox, CheckBox
 
 
 def save_pickle(file: Path, data: np.array) -> None:

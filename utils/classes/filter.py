@@ -2,39 +2,46 @@
 """
 @Time    : 2024/6/12 上午9:29
 @Author  : zxy
-@File    : filters.py
+@File    : filter.py
 """
+from typing import Optional
 
+import numpy as np
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout
 from scipy.signal import iircomb, iirnotch, iirpeak, cheby2, bessel, ellip, cheby1, butter, buttord, cheb1ord, cheb2ord, \
     ellipord, filtfilt
 
-from ..widgets import LineEditWithReg, Label, PushButton, ComboBox, Dialog, CheckBox
+from ..widget import LineEditWithReg, Label, PushButton, ComboBox, Dialog, CheckBox
 
 
 class FilterI:
     """一类滤波器"""
+    filter_names = {'Butterworth': butter,
+                    'Chebyshev type I': cheby1,
+                    'Chebyshev type II': cheby2,
+                    'Elliptic (Cauer)': ellip,
+                    'Bessel/Thomson': bessel}
+    btype = ['lowpass', 'highpass', 'bandpass', 'bandstop']
+    cal_names = {butter: buttord, cheby1: cheb1ord, cheby2: cheb2ord, ellip: ellipord}
+    norms = ['phase', 'delay', 'mag']
 
-    def __init__(self, parent, filter_name: str):
+    def __init__(self, filter_name: str, data: np.array):
         """
         初始化各种参数
         Args:
-            parent: 父级，主窗口
             filter_name: 滤波器名
+            data: 数据
+            
         """
-        self.parent = parent
-        filter_names = {'Butterworth': butter, 'Chebyshev type I': cheby1, 'Chebyshev type II': cheby2,
-                        'Elliptic (Cauer)': ellip, 'Bessel/Thomson': bessel}
+        self.data = data
         self.filter_name = filter_name
-        self.filter = filter_names[filter_name]
+        self.filter = self.filter_names[filter_name]
         self.order = 4
         self.Wn = 0.02
-        self.btype = ['lowpass', 'highpass', 'bandpass', 'bandstop']
-        self.cal_names = {butter: buttord, cheby1: cheb1ord, cheby2: cheb2ord, ellip: ellipord}
         self.cal_order = 0
         self.cal_Wn = 0.
-        self.method = self.btype[0]
+        self.method = 'lowpass'
         self.wp = 0.2
         self.ws = 0.3
         self.rp = 5
@@ -42,7 +49,6 @@ class FilterI:
         self.gpass = 3
         self.gstop = 40
         self.analog = False
-        self.norms = ['phase', 'delay', 'mag']
         self.norm = 'phase'
         self.flag = True
 
@@ -51,28 +57,9 @@ class FilterI:
         self.b = None
         self.a = None
 
+        self.draw = False
+
         self.initDialog()
-
-    def plotIIRFilter(self):
-        """
-        绘制滤波后的数据
-        Returns:
-
-        """
-        data = self.parent.data[self.parent.channel_number - 1]
-        data = filtfilt(self.b, self.a, data)  # 滤波
-
-        combine_widget = self.parent.initTwoPlotWidgets(data, 'IIR滤波器')
-
-        if hasattr(self, 'method'):
-            self.parent.tab_widget.addTab(combine_widget, f'IIR滤波器 - 滤波器={self.filter_name}\t'
-                                                          f'滤波器类型={self.method}\t'
-                                                          f'通道号={self.parent.channel_number}')
-        else:
-            self.parent.tab_widget.addTab(combine_widget, f'IIR滤波器 - 滤波器={self.filter_name}\t'
-                                                          f'通道号={self.parent.channel_number}')
-
-        self.parent.ifUpdateData(self.parent.update_data, data)
 
     def initDialog(self):
         """
@@ -276,7 +263,7 @@ class FilterI:
             dialog_layout.addWidget(btn)
             self.dialog.setLayout(dialog_layout)
 
-        btn.clicked.connect(self.plotIIRFilter)
+        btn.clicked.connect(self.filterData)
         btn.clicked.connect(self.dialog.close)
 
     def updateParams(self):
@@ -352,11 +339,9 @@ class FilterI:
         if self.filter == butter:
             self.b, self.a = self.filter(N=self.order, Wn=self.Wn, btype=self.method, analog=self.analog)
         elif self.filter == cheby1:
-            self.b, self.a = self.filter(N=self.order, rp=self.rp, Wn=self.Wn, btype=self.method,
-                                         analog=self.analog)
+            self.b, self.a = self.filter(N=self.order, rp=self.rp, Wn=self.Wn, btype=self.method, analog=self.analog)
         elif self.filter == cheby2:
-            self.b, self.a = self.filter(N=self.order, rs=self.rs, Wn=self.Wn, btype=self.method,
-                                         analog=self.analog)
+            self.b, self.a = self.filter(N=self.order, rs=self.rs, Wn=self.Wn, btype=self.method, analog=self.analog)
         elif self.filter == ellip:
             self.b, self.a = self.filter(N=self.order, rp=self.rp, rs=self.rs, Wn=self.Wn, btype=self.method,
                                          analog=self.analog)
@@ -364,12 +349,22 @@ class FilterI:
             self.b, self.a = self.filter(N=self.order, Wn=self.Wn, btype=self.method, analog=self.analog,
                                          norm=self.norm)
 
+    def filterData(self):
+        """
+        滤波数据
+        Returns:
+
+        """
+        self.draw = True
+        self.data = filtfilt(self.b, self.a, self.data)  # 滤波
+
     def runDialog(self):
         """
         更新对话框组件状态，运行对话框
         Returns:
 
         """
+        self.draw = False
         self.dialog.combx.setCurrentText(self.method)
         self.dialog.checkbx.setChecked(self.analog)
         self.dialog.wp_le.setText(str(self.wp))
@@ -386,19 +381,21 @@ class FilterI:
 
 class FilterII:
     """二类滤波器"""
+    filter_names = {'Notch Digital Filter': iirnotch,
+                    'Peak (Resonant) Digital Filter': iirpeak,
+                    'Notching or Peaking Digital Comb Filter': iircomb}
 
-    def __init__(self, parent, filter_name: str):
+    def __init__(self, filter_name: str, data: np.array):
         """
         初始化各种参数
         Args:
-            parent: 父级
             filter_name: 滤波器名称
+            data: 数据
+            
         """
-        self.parent = parent
-        filter_names = {'Notch Digital Filter': iirnotch, 'Peak (Resonant) Digital Filter': iirpeak,
-                        'Notching or Peaking Digital Comb Filter': iircomb}
+        self.data = data
         self.filter_name = filter_name
-        self.filter = filter_names[filter_name]
+        self.filter = self.filter_names[filter_name]
         self.w0 = 0.5
         self.Q = 30
         self.fs = 2.0
@@ -410,28 +407,18 @@ class FilterII:
         self.b = None
         self.a = None
 
+        self.draw = False
+
         self.initDialog()
 
-    def plotIIRFilter(self):
+    def filterData(self):
         """
-        绘制滤波后的数据
+        滤波数据
         Returns:
 
         """
-        data = self.parent.data[self.parent.channel_number - 1]
-        data = filtfilt(self.b, self.a, data)  # 滤波
-
-        combine_widget = self.parent.initTwoPlotWidgets(data, 'IIR滤波器')
-
-        if hasattr(self, 'method'):
-            self.parent.tab_widget.addTab(combine_widget, f'IIR滤波器 - 滤波器={self.filter_name}\t'
-                                                          f'滤波器类型={self.method}\t'
-                                                          f'通道号={self.parent.channel_number}')
-        else:
-            self.parent.tab_widget.addTab(combine_widget, f'IIR滤波器 - 滤波器={self.filter_name}\t'
-                                                          f'通道号={self.parent.channel_number}')
-
-        self.parent.ifUpdateData(self.parent.update_data, data)
+        self.draw = True
+        self.data = filtfilt(self.b, self.a, self.data)  # 滤波
 
     def initDialog(self):
         """
@@ -494,7 +481,7 @@ class FilterII:
 
         vbox.addWidget(btn)
         self.dialog.setLayout(vbox)
-        btn.clicked.connect(self.plotIIRFilter)
+        btn.clicked.connect(self.filterData)
         btn.clicked.connect(self.dialog.close)
 
     def updateParams(self):
@@ -503,6 +490,7 @@ class FilterII:
         Returns:
 
         """
+        self.draw = False
         self.w0 = float(self.dialog.W0_le.text())
         self.Q = float(self.dialog.Q_le.text())
         if self.filter == iircomb:
@@ -535,29 +523,30 @@ class FilterII:
         self.dialog.exec_()
 
 
-class Filter:
-    def __init__(self, parent):
-        """
-        根据滤波器名创建滤波器类
-        Args:
-            parent: 父级，为主窗口
-        """
-        self.parent = parent
-        self.filter_name = ' '
-        self.name = None
+class FilterHandler:
+    def __init__(self):
+        """根据滤波器名创建滤波器类"""
+        self.method = None
+        self.filter_name = None
         self.obj = None
 
-    def runDialog(self):
+    def run(self, name: str, data: np.array) -> Optional[np.array]:
         """
-        运行对话框
+        运行滤波器
         Returns:
 
         """
-        if self.name != self.filter_name:
-            self.filter_name = self.name
+        if name != self.filter_name:
+            self.filter_name = name
             if self.filter_name in {'Butterworth', 'Chebyshev type I', 'Chebyshev type II',
                                     'Elliptic (Cauer)', 'Bessel/Thomson'}:
-                self.obj = FilterI(self.parent, self.filter_name)
+                self.obj = FilterI(self.filter_name, data)
+                self.method = self.obj.method
             else:
-                self.obj = FilterII(self.parent, self.filter_name)
+                self.obj = FilterII(self.filter_name, data)
+                self.method = None
+        else:
+            self.obj.data = data
         self.obj.runDialog()
+
+        return self.obj.data if self.obj.draw else None

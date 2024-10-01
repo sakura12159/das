@@ -26,9 +26,9 @@ from scipy.signal import hilbert, spectrogram
 from scipy.signal.windows import *
 
 from .classes.data_sifting import DataSifting
-from .classes.filters import Filter
-from .functions import *
-from .widgets import *
+from .classes.filter import Filter
+from .function import *
+from .widget import *
 
 
 class MainWindow(QMainWindow):
