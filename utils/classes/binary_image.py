@@ -12,62 +12,80 @@ from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout
 from utils.widget import PushButton, ComboBox, RadioButton, LineEditWithReg, Dialog
 
 
-class BinaryImage:
-    binary_image_threshold_methods = {'双峰法': 'twoPeaks', '大津法': 'ostu'}
+class BinaryImageHandler:
+    threshold_methods = {
+        '双峰法': 'twoPeaks',
+        '大津法': 'ostu'
+    }
 
     def __init__(self):
         self.data = None
-        self.binary_image_flag = True  # 是否使用简单阈值
-        self.binary_image_threshold = 120.0  # 阈值
-        self.binary_image_threshold_method_index = 0  # 计算阈值方法的索引
+        self.flag = True  # 是否使用简单阈值
+        self.threshold = 120.0  # 阈值
+        self.threshold_method = '双峰法'  # 计算阈值方法
 
         self.draw = False
 
     def normalizeToGrayScale(self, data: np.array) -> np.array:
-        """数据标准化至0-255"""
+        """
+        将数据范围缩放到 0-255
+        Args:
+            data: 数据
+
+        Returns:
+
+        """
         mx, mn = np.max(data), np.min(data)
         data = (data - mn) / (mx - mn)
         return data * 255
 
     def binarizeData(self) -> None:
-        """二值化数据"""
+        """
+        二值化数据
+        Returns:
+
+        """
         self.draw = True
-        self.data[self.data >= self.binary_image_threshold] = 255
-        self.data[self.data < self.binary_image_threshold] = 0
+        self.data[self.data >= self.threshold] = 255
+        self.data[self.data < self.threshold] = 0
 
     def runDialog(self) -> None:
-        """二值图设置组件"""
+        """
+        二值图设置组件
+        Returns:
+
+        """
         dialog = Dialog()
         dialog.setWindowTitle('二值图')
 
-        self.binary_image_input_radiobtn = RadioButton('阈值')
-        self.binary_image_input_radiobtn.setChecked(self.binary_image_flag)
+        self.input_radiobtn = RadioButton('阈值')
+        self.input_radiobtn.setChecked(self.flag)
 
-        self.binary_image_threshold_line_edit = LineEditWithReg(digit=True)
-        self.binary_image_threshold_line_edit.setText(str(self.binary_image_threshold))
+        self.threshold_line_edit = LineEditWithReg(digit=True)
+        self.threshold_line_edit.setText(str(self.threshold))
 
-        self.binary_image_method_radiobtn = RadioButton('计算方法')
-        self.binary_image_method_radiobtn.setChecked(not self.binary_image_flag)
+        self.method_radiobtn = RadioButton('计算方法')
+        self.method_radiobtn.setChecked(not self.flag)
 
-        self.binary_image_method_combx = ComboBox()
-        self.binary_image_method_combx.addItems(self.binary_image_threshold_methods.keys())
-        self.binary_image_method_combx.setCurrentIndex(self.binary_image_threshold_method_index)
+        self.method_combx = ComboBox()
+        self.method_combx.addItems(self.threshold_methods.keys())
+        self.method_combx.setCurrentText(self.threshold_method)
 
         btn = PushButton('确定')
-        btn.clicked.connect(self.updateBinaryImageParams)
+        btn.clicked.connect(self.updateParams)
         btn.clicked.connect(self.binarizeData)
         btn.clicked.connect(dialog.close)
 
         vbox = QVBoxLayout()
         hbox1 = QHBoxLayout()
-        hbox1.addWidget(self.binary_image_input_radiobtn)
-        hbox1.addWidget(self.binary_image_threshold_line_edit)
+        hbox1.addWidget(self.input_radiobtn)
+        hbox1.addWidget(self.threshold_line_edit)
         hbox1.addStretch(0)
 
         hbox2 = QHBoxLayout()
-        hbox2.addWidget(self.binary_image_method_radiobtn)
+        hbox2.addWidget(self.method_radiobtn)
         hbox2.addSpacing(20)
-        hbox2.addWidget(self.binary_image_method_combx)
+        hbox2.addWidget(self.method_combx)
         hbox2.addStretch(0)
 
         vbox.addLayout(hbox1)
@@ -78,24 +96,31 @@ class BinaryImage:
         dialog.setLayout(vbox)
         dialog.exec_()
 
-    def updateBinaryImageParams(self) -> None:
-        """检查选择那种求阈值方法"""
-        self.binary_image_flag = self.binary_image_input_radiobtn.isChecked()
+    def updateParams(self) -> None:
+        """
+        检查选择那种求阈值方法
+        Returns:
 
-        if self.binary_image_flag:
-            threshold = float(self.binary_image_threshold_line_edit.text())
+        """
+        self.flag = self.input_radiobtn.isChecked()
+
+        if self.flag:
+            threshold = float(self.threshold_line_edit.text())
             if threshold > 255:
                 threshold = 255
         else:
             threshold = getattr(self,
-                                self.binary_image_threshold_methods[self.binary_image_method_combx.currentText()])()
+                                self.threshold_methods[self.method_combx.currentText()])()
 
-        self.binary_image_threshold_method_index = self.binary_image_method_combx.currentIndex()
-        self.binary_image_threshold = threshold
+        self.threshold_method = self.method_combx.currentText()
+        self.threshold = threshold
 
     def twoPeaks(self) -> int:
-        """双峰法求阈值"""
+        """
+        双峰法求阈值
+        Returns:
 
+        """
         # 存储灰度直方图
         gray_scale_hist = [0] * 256
         for i, x in enumerate(self.data):
@@ -118,7 +143,11 @@ class BinaryImage:
         return first_peak + min_gray_scale_location + 1
 
     def ostu(self) -> int:
-        """OSTU（大津）法"""
+        """
+        OSTU（大津）法
+        Returns:
+
+        """
         height, width = self.data.shape
         sq = height * width
         max_gray_scale = threshold = 0
@@ -137,7 +166,14 @@ class BinaryImage:
         return threshold
 
     def run(self, data: np.array) -> Optional[int]:
-        """求二值图阈值"""
+        """
+        求二值图阈值
+        Args:
+            data: 数据
+
+        Returns: 二值图绘制阈值
+
+        """
         self.draw = False
         self.data = self.normalizeToGrayScale(data)
         self.runDialog()

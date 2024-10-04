@@ -14,6 +14,7 @@ from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QScrollArea
 from scipy.signal import hilbert
 
+from utils.function import xAxis, initCombinedPlotWidget
 from utils.widget import MyPlotWidget, Dialog, LineEditWithReg, Label, RadioButton, LineEdit, ComboBox, PushButton
 
 
@@ -29,7 +30,6 @@ class EMDHandler:
         self.ret = None
 
         self.emd_method = 'emd'
-        self.emd_method_index = 0
         self.imfs_res_num = 5  # 所有模态加残余模态的数量
         self.reconstruct_nums = str([i for i in range(1, 5)])  # 重构模态号
         self.emd_options_flag = True  # 默认操作为分解
@@ -37,17 +37,17 @@ class EMDHandler:
         self.eemd_noise_width = 0.05  # 添加的高斯噪声的标准差
         self.ceemdan_trials = 100  # 添加噪声点数量？
         self.ceemdan_epsilon = 0.005  # 添加噪声大小与标准差的乘积
+        self.ceemdan_noise_kind = 'normal'  # 噪声种类
         self.ceemdan_noise_scale = 1.0  # 添加噪声的大小
-        self.ceemdan_noise_kind_index = 0  # 添加噪声种类的索引
         self.ceemdan_range_thr = 0.01  # 范围阈值，小于则不再分解
         self.ceemdan_total_power_thr = 0.05  # 总功率阈值，小于则不再分解
 
-        self.draw = False
-
     def runEMD(self) -> None:
-        """绘制emd分解图和重构图"""
-        self.draw = True
+        """
+        运行 emd，并绘制 emd 分解图和重构图
+        Returns:
 
+        """
         if self.emd_method == 'emd':
             emd = EMD()
             self.imfs_res = emd.emd(self.data, max_imf=self.imfs_res_num - 1)
@@ -73,9 +73,11 @@ class EMDHandler:
             hbox = QHBoxLayout()
 
             pw_time_list, pw_fre_list = [], []
-            x_time = np.linspace(self.sampling_times_from, self.sampling_times_to,
-                                 self.sampling_times) / self.sampling_rate
-            x_fre = np.fft.fftfreq(self.sampling_times, 1 / self.sampling_rate)[:self.sampling_times // 2]
+            x_time = xAxis(self.sampling_times,
+                           self.sampling_times_from,
+                           self.sampling_times_to,
+                           self.sampling_rate)
+            x_fre = xAxis(self.sampling_times, self.sampling_rate, freq=True)
             for i, x in enumerate(self.imfs_res):
                 if i == 0:
                     pw_time = MyPlotWidget(f'{self.emd_method}分解 - 时域', '', 'IMF1（rad）')
@@ -113,10 +115,20 @@ class EMDHandler:
             for i in range(len(reconstruct_imf) - 1):
                 imf_num = reconstruct_imf[i]
                 data += self.imfs_res[imf_num]  # 重构数据
-            self.ret = data
+
+            self.ret = initCombinedPlotWidget(data,
+                                              self.emd_method + '重构',
+                                              self.sampling_times_from,
+                                              self.sampling_times_to,
+                                              self.sampling_times,
+                                              self.sampling_rate)
 
     def runDialog(self) -> None:
-        """使用emd分解合成滤波"""
+        """
+        运行对话框
+        Returns:
+
+        """
         dialog = Dialog()
         dialog.resize(600, 200)
         dialog.setWindowTitle('EMD设置')
@@ -126,7 +138,7 @@ class EMDHandler:
         emd_method_label = Label('分解方式')
         self.emd_method_combx = ComboBox()
         self.emd_method_combx.addItems(self.emd_methods)
-        self.emd_method_combx.setCurrentIndex(self.emd_method_index)
+        self.emd_method_combx.setCurrentText(self.emd_method)
         self.emd_decompose_radio_btn = RadioButton('分解')
         self.emd_decompose_radio_btn.setChecked(self.emd_options_flag)
         imf_num_label = Label('IMF数量')
@@ -174,7 +186,7 @@ class EMDHandler:
         ceemdan_noise_kind_label = Label('噪声种类')
         self.ceemdan_noise_kind_combx = ComboBox()
         self.ceemdan_noise_kind_combx.addItems(['normal', 'uniform'])
-        self.ceemdan_noise_kind_combx.setCurrentIndex(self.ceemdan_noise_kind_index)
+        self.ceemdan_noise_kind_combx.setCurrentText(self.ceemdan_noise_kind)
         ceemdan_range_thr_label = Label('振幅范围阈值')
         self.ceemdan_range_thr_line_edit = LineEditWithReg(digit=True)
         self.ceemdan_range_thr_line_edit.setText(str(self.ceemdan_range_thr))
@@ -186,7 +198,7 @@ class EMDHandler:
         self.ceemdan_total_power_thr_line_edit.setToolTip('用于IMF分解检查，如果信号总功率小于总功率阈值，则认为分解完成')
 
         btn = PushButton('确定')
-        btn.clicked.connect(self.updateEMDParams)
+        btn.clicked.connect(self.updateParams)
         btn.clicked.connect(self.runEMD)
         btn.clicked.connect(dialog.close)
 
@@ -263,10 +275,13 @@ class EMDHandler:
         dialog.setLayout(vbox)
         dialog.exec_()
 
-    def updateEMDParams(self) -> None:
-        """更新分解数和重构数"""
+    def updateParams(self) -> None:
+        """
+        更新分解数和重构数
+        Returns:
+
+        """
         self.emd_method = self.emd_method_combx.currentText()
-        self.emd_method_index = self.emd_method_combx.currentIndex()
         self.emd_options_flag = self.emd_decompose_radio_btn.isChecked()
 
         if self.emd_options_flag:
@@ -285,13 +300,20 @@ class EMDHandler:
         self.ceemdan_trials = int(self.ceemdan_trials_line_edit.text())
         self.ceemdan_epsilon = float(self.ceemdan_epsilon_line_edit.text())
         self.ceemdan_noise_scale = float(self.ceemdan_noise_scale_line_edit.text())
-        self.ceemdan_noise_kind_index = self.ceemdan_noise_kind_combx.currentIndex()
+        self.ceemdan_noise_kind = self.ceemdan_noise_kind_combx.currentText()
         self.ceemdan_range_thr = float(self.ceemdan_range_thr_line_edit.text())
         self.ceemdan_total_power_thr = float(self.ceemdan_total_power_thr_line_edit.text())
 
-    def runEMDInstantaneousFrequency(self) -> np.array:
-        """绘制瞬时频率"""
-        x_time = np.linspace(self.sampling_times_from, self.sampling_times_to, self.sampling_times) / self.sampling_rate
+    def calculateInstantaneousFrequency(self) -> np.array:
+        """
+        计算瞬时频率
+        Returns:
+
+        """
+        x_time = xAxis(self.sampling_times,
+                       self.sampling_times_from,
+                       self.sampling_times_to,
+                       self.sampling_rate)
         analytic_signal = hilbert(self.imfs_res)
         inst_phase = np.unwrap(np.angle(analytic_signal))
         inst_freqs = np.diff(inst_phase) / (2 * np.pi * (x_time[1] - x_time[0]))
@@ -321,13 +343,24 @@ class EMDHandler:
     def run(self,
             data: np.array,
             sampling_times_from: int,
-            sampling_time_to: int,
-            sampling_rate: int) -> Optional[np.array]:
-        self.draw = False
+            sampling_times_to: int,
+            sampling_rate: int) -> Optional[QWidget]:
+        """
+        运行 emd，返回绘制图的组件
+        Args:
+            data: 数据
+            sampling_times_from: 数据 x 轴起始
+            sampling_times_to: 数据 x 轴终止
+            sampling_rate: 采样率
+
+        Returns: 含有 emd 结果的绘图组件
+
+        """
+        self.ret = None
         self.data = data
         self.sampling_times = len(data)
         self.sampling_times_from = sampling_times_from
-        self.sampling_times_to = sampling_time_to
+        self.sampling_times_to = sampling_times_to
         self.sampling_rate = sampling_rate
         self.runDialog()
-        return self.ret if self.draw else None
+        return self.ret

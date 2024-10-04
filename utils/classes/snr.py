@@ -22,7 +22,11 @@ class SNRCalculator:
         self.noise_stop_sampling_time = 2
 
     def runDialog(self) -> None:
-        """计算信噪比对话框"""
+        """
+        计算信噪比对话框
+        Returns:
+
+        """
         dialog = Dialog()
         dialog.setMaximumWidth(500)
         dialog.setWindowTitle('计算信噪比')
@@ -53,7 +57,7 @@ class SNRCalculator:
         snr_unit_label = Label('dB')
 
         btn = PushButton('计算')
-        btn.clicked.connect(self.updateCalculateSNRParams)
+        btn.clicked.connect(self.updateParams)
         btn.clicked.connect(self.calculateSNR)
 
         vbox = QVBoxLayout()
@@ -96,8 +100,12 @@ class SNRCalculator:
         dialog.setLayout(vbox)
         dialog.exec_()
 
-    def updateCalculateSNRParams(self) -> None:
-        """更新参数"""
+    def updateParams(self) -> None:
+        """
+        更新参数
+        Returns:
+
+        """
         self.signal_channel_number = int(self.signal_channel_number_line_edit.text())
         self.noise_channel_number = int(self.noise_channel_number_line_edit.text())
         self.signal_start_sampling_time = int(self.signal_start_sampling_time_line_edit.text())
@@ -106,7 +114,11 @@ class SNRCalculator:
         self.noise_stop_sampling_time = int(self.noise_stop_sampling_time_line_edit.text())
 
     def calculateSNR(self) -> None:
-        """计算信噪比"""
+        """
+        计算信噪比
+        Returns:
+
+        """
         signal_data = self.data[self.signal_channel_number,
                       self.signal_start_sampling_time:self.signal_stop_sampling_time + 1]
         noise_data = self.data[self.noise_channel_number,
@@ -116,5 +128,13 @@ class SNRCalculator:
         self.snr_line_edit.setText(str(snr))
 
     def run(self, data) -> None:
+        """
+        运行组件
+        Args:
+            data: 数据
+
+        Returns:
+
+        """
         self.data = data
         self.runDialog()
