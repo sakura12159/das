@@ -891,7 +891,7 @@ class MainWindow(QMainWindow):
             spatial_resolution = raw_data[13]  # 空间分辨率，m
             start_distance = raw_data[14]  # 开始位置，m
             stop_distance = raw_data[15]  # 结束位置，m
-            # sampling_time = raw_data[17]  # 连续采集时间，即一个文件时长，s
+            sampling_time = int(raw_data[17])  # 连续采集时间，即一个文件时长，s
             p = raw_data[18]  # P 系数
             time_decimation = raw_data[19]  # 时间系数
             number = raw_data[20]  # 滑动系数
@@ -918,7 +918,7 @@ class MainWindow(QMainWindow):
                 '测量开始位置': f'{start_distance:.3f}m',
                 '测量结束位置': f'{stop_distance:.3f}m',
                 '传感点数（通道数）': f'{channels_num}',
-                # '单个文件时长': f'{sampling_time}s',
+                '单个文件采样点数': f'{sampling_time * sampling_rate}',
                 '计算系数 P': f'{p}',
                 '降采样时间系数': f'{time_decimation}',
                 '窗口滑动平均系数': f'{number}',
@@ -935,6 +935,7 @@ class MainWindow(QMainWindow):
 
         else:
             sampling_rate, channels_num = int(raw_data[6]), int(raw_data[9])  # 采样率，通道数
+            sampling_time = (len(raw_data) - 10) // channels_num
             for file in self.file_names:
                 raw_data = np.fromfile(os.path.join(self.file_path, file), dtype='<f4')
                 time.append(raw_data[:6])  # GPS时间
@@ -944,6 +945,7 @@ class MainWindow(QMainWindow):
                 'GPS时间': f'{"-".join(f(time[0]))} 至 {"-".join(f(time[-1]))}',
                 '采样频率': f'{sampling_rate}Hz',
                 '传感点数（通道数）': f'{channels_num}',
+                '单个文件采样点数': f'{sampling_time}',
             }
 
         self.time = time
