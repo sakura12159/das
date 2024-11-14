@@ -21,12 +21,13 @@ class BinaryImageHandler:
     def __init__(self):
         self.data = None
         self.flag = True  # 是否使用简单阈值
-        self.threshold = 120.0  # 阈值
+        self.threshold = 120  # 阈值
         self.threshold_method = '双峰法'  # 计算阈值方法
 
         self.draw = False
 
-    def normalizeToGrayScale(self, data: np.array) -> np.array:
+    @staticmethod
+    def normalizeToGrayScale(data: np.array) -> np.array:
         """
         将数据范围缩放到 0-255
         Args:
@@ -61,7 +62,7 @@ class BinaryImageHandler:
         self.input_radiobtn = RadioButton('阈值')
         self.input_radiobtn.setChecked(self.flag)
 
-        self.threshold_line_edit = LineEditWithReg(digit=True)
+        self.threshold_line_edit = LineEditWithReg()
         self.threshold_line_edit.setText(str(self.threshold))
 
         self.method_radiobtn = RadioButton('计算方法')
@@ -159,19 +160,19 @@ class BinaryImageHandler:
             bigger_ratio = len(bigger_px) / sq
             average_gray_scale_smaller = np.mean(smaller_px) if len(smaller_px) > 0 else 0
             average_gray_scale_bigger = np.mean(bigger_px) if len(bigger_px) > 0 else 0
-            otsu = smaller_ratio * bigger_ratio * (average_gray_scale_smaller - average_gray_scale_bigger) ** 2
-            if otsu > max_gray_scale:
-                max_gray_scale = otsu
+            cur = smaller_ratio * bigger_ratio * (average_gray_scale_smaller - average_gray_scale_bigger) ** 2
+            if cur > max_gray_scale:
+                max_gray_scale = cur
                 threshold = i
         return threshold
 
-    def run(self, data: np.array) -> Optional[int]:
+    def run(self, data: np.array) -> Optional[np.array]:
         """
         求二值图阈值
         Args:
             data: 数据
 
-        Returns: 二值图绘制阈值
+        Returns: 二值图数据
 
         """
         self.draw = False

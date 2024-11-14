@@ -413,7 +413,7 @@ class MainWindow(QMainWindow):
 
         file_table_scrollbar = QScrollBar(Qt.Vertical)
         file_table_scrollbar.setStyleSheet('min-height: 100')  # 设置滚动滑块的最小高度
-        self.files_table_widget = QTableWidget(100, 1)
+        self.files_table_widget = QTableWidget(30, 1)
         self.files_table_widget.setVerticalScrollBar(file_table_scrollbar)
         self.files_table_widget.setStyleSheet('font-size: 17px; font-family: "Times New Roman", "Microsoft YaHei";')
         self.files_table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 设置表格不可编辑
@@ -664,7 +664,7 @@ class MainWindow(QMainWindow):
 
         tr = QTransform()
         tr.scale(1 / self.sampling_rate, 1)  # 缩放
-        tr.translate(self.sampling_times_from_num, 0)  # 移动
+        tr.translate(self.sampling_times_from_num - 1, 0)  # 移动
 
         item = pg.ImageItem()
         item.setImage(self.data.T)
@@ -987,7 +987,6 @@ class MainWindow(QMainWindow):
         self.read_mode_action.setText(f'读取模式：{"普通采集" if self.is_scouter else "scouter 采集"}')
         self.is_scouter = ~self.is_scouter
 
-
     def showAcquisitionParams(self):
         """
         打印采集参数
@@ -1018,7 +1017,7 @@ class MainWindow(QMainWindow):
         """
         if not self.snr_calculator:
             self.snr_calculator = SNRCalculator()
-        self.snr_calculator.run(self.data)
+        self.snr_calculator.run(self.data, self.sampling_rate)
 
     # """------------------------------------------------------------------------------------------------------------"""
     """操作-查看数据（时间）调用函数"""
@@ -1034,13 +1033,14 @@ class MainWindow(QMainWindow):
 
         from_label = Label('始')
         self.time_range_from_line_edit = LineEditWithReg(digit=True)
-        self.time_range_from_line_edit.setText(str(self.sampling_times_from_num / self.sampling_rate))
+        self.time_range_from_line_edit.setText(str((self.sampling_times_from_num - 1) / self.sampling_rate))
         to_label = Label('止')
         self.time_range_to_line_edit = LineEditWithReg(digit=True)
         self.time_range_to_line_edit.setText(str(self.sampling_times_to_num / self.sampling_rate))
 
         btn = PushButton('确定')
         btn.clicked.connect(self.setTimeRange)
+        btn.clicked.connect(self.updateDataRange)
         btn.clicked.connect(self.updateDataParams)
         btn.clicked.connect(self.updateImages)
         btn.clicked.connect(dialog.close)
@@ -1067,21 +1067,13 @@ class MainWindow(QMainWindow):
         from_num = int(float(self.time_range_from_line_edit.text()) * self.sampling_rate)
         to_num = int(float(self.time_range_to_line_edit.text()) * self.sampling_rate)
 
-        if 1 <= from_num < self.origin_data.shape[1] and 1 < to_num <= self.origin_data.shape[1]:
+        if 0 <= from_num < self.origin_data.shape[1] and 1 < to_num <= self.origin_data.shape[1]:
             if from_num > to_num:
                 from_num, to_num = to_num, from_num
-        elif from_num == 0 and 1 < to_num <= self.origin_data.shape[1]:
-            from_num = 1
         else:
-            from_num, to_num = 1, self.origin_data.shape[1]
+            from_num, to_num = 0, self.origin_data.shape[1]
 
-        self.sampling_times_from_num, self.sampling_times_to_num = from_num, to_num
-
-        # 捕获索引错误等
-        try:
-            self.updateDataRange()
-        except Exception as err:
-            printError(err)
+        self.sampling_times_from_num, self.sampling_times_to_num = from_num + 1, to_num
 
     # """------------------------------------------------------------------------------------------------------------"""
     """查看数据（通道）调用函数"""
@@ -1104,6 +1096,7 @@ class MainWindow(QMainWindow):
 
         btn = PushButton('确定')
         btn.clicked.connect(self.setChannelRange)
+        btn.clicked.connect(self.updateDataRange)
         btn.clicked.connect(self.updateDataParams)
         btn.clicked.connect(self.updateImages)
         btn.clicked.connect(dialog.close)
@@ -1140,12 +1133,6 @@ class MainWindow(QMainWindow):
 
         self.channel_from_num, self.channel_to_num = from_num, to_num
 
-        # 捕获索引错误等
-        try:
-            self.updateDataRange()
-        except Exception as err:
-            printError(err)
-
     # """------------------------------------------------------------------------------------------------------------"""
     """更改读取通道号步长、读取文件数调用的函数"""
 
@@ -1156,6 +1143,7 @@ class MainWindow(QMainWindow):
 
         """
         dialog = Dialog()
+        dialog.setFixedWidth(400)
         dialog.setWindowTitle('设置通道切换步长')
 
         channel_number_step_label = Label('步长')
@@ -1195,6 +1183,7 @@ class MainWindow(QMainWindow):
 
         """
         dialog = Dialog()
+        dialog.setFixedWidth(400)
         dialog.setWindowTitle('设置文件读取数量')
 
         files_read_number_label = Label('文件读取数量')
@@ -1432,7 +1421,7 @@ class MainWindow(QMainWindow):
                               self.sampling_rate)
 
         if ret is not None:
-            if self.filter.method:
+            if self.filter.method is not None:
                 self.tab_widget.addTab(ret, f'IIR滤波器 - 通道号={self.channel_number}\t'
                                             f'滤波器={self.filter.filter_name}\t'
                                             f'滤波器类型={self.filter.method}')

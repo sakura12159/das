@@ -44,8 +44,8 @@ class FilterI:
         self.sampling_rate = sampling_rate
         self.order = 4
         self.Wn = int(0.1 * sampling_rate)
-        self.cal_order = 0
-        self.cal_Wn = 0
+        self.cal_order = None
+        self.cal_Wn = None
         self.method = 'lowpass'
         self.wp = str(int(0.2 * sampling_rate))
         self.ws = str(int(0.3 * sampling_rate))
@@ -56,8 +56,6 @@ class FilterI:
         self.analog = False
         self.norm = 'phase'
         self.flag = True
-
-        self.dialog = None
 
         self.b = None
         self.a = None
@@ -77,13 +75,13 @@ class FilterI:
         self.combx = ComboBox()
         self.combx.setToolTip('滤波器的类型')
         self.combx.addItems(self.btype)
-        self.combx.currentIndexChanged.connect(self.resetCalculateParmas)
         self.combx.setCurrentText(self.method)
+        self.combx.currentTextChanged.connect(self.resetCalculateParams)
 
         self.checkbx = CheckBox('模拟滤波器')
         self.checkbx.setToolTip('勾选时返回模拟滤波器，否则返回数字滤波器')
-        self.checkbx.stateChanged.connect(self.resetCalculateParmas)
         self.checkbx.setChecked(self.analog)
+        self.checkbx.stateChanged.connect(self.resetCalculateParams)
 
         # 计算区域组件
         cal_label = Label('计算滤波器阶数和自然频率')
@@ -97,8 +95,8 @@ class FilterI:
                               'highpass: wp = 300, ws = 200\n'
                               'bandpass: wp = 200 500, ws = 100 600\n'
                               'bandstop: wp = 100 600, ws = 200 500')
-        self.wp_le.textChanged.connect(self.resetCalculateParmas)
         self.wp_le.setText(str(self.wp))
+        self.wp_le.textChanged.connect(self.resetCalculateParams)
 
         ws_label = Label('阻带频率（ws）')
         self.ws_le = LineEditWithReg(space=True)
@@ -108,20 +106,20 @@ class FilterI:
                               'highpass: wp = 300, ws = 200\n'
                               'bandpass: wp = 200 500, ws = 100 600\n'
                               'bandstop: wp = 100 600, ws = 200 500')
-        self.ws_le.textChanged.connect(self.resetCalculateParmas)
         self.ws_le.setText(str(self.ws))
+        self.ws_le.textChanged.connect(self.resetCalculateParams)
 
         gpass_label = Label('通带损失（gpass）')
         self.gpass_le = LineEditWithReg(digit=True)
         self.gpass_le.setToolTip('通带的最大损失（dB）')
-        self.gpass_le.textChanged.connect(self.resetCalculateParmas)
         self.gpass_le.setText(str(self.gpass))
+        self.gpass_le.textChanged.connect(self.resetCalculateParams)
 
         gstop_label = Label('阻带衰减（gstop）')
         self.gstop_le = LineEditWithReg(digit=True)
         self.gstop_le.setToolTip('阻带最小衰减（dB）')
-        self.gstop_le.textChanged.connect(self.resetCalculateParmas)
         self.gstop_le.setText(str(self.gstop))
+        self.gstop_le.textChanged.connect(self.resetCalculateParams)
 
         cal_order_label = Label('阶数（N）')
         self.cal_order_le = LineEditWithReg(focus=False)
@@ -131,6 +129,11 @@ class FilterI:
 
         self.cal_btn = PushButton('计算')
         self.cal_btn.clicked.connect(self.calculateParams)
+
+        if not self.flag:
+            self.cal_order_le.setText(str(self.cal_order))
+            self.cal_Wn_le.setText(str(self.cal_Wn))
+            self.cal_btn.setText('输入阶数和自然频率')
 
         hbox1 = QHBoxLayout()
         hbox2 = QHBoxLayout()
@@ -297,8 +300,7 @@ class FilterI:
         self.analog = self.checkbx.isChecked()
         self.norm = self.norm_combx.currentText()
         self.order = int(self.order_le.text())
-        self.Wn = self.Wn_le.text()
-        self.Wn = list(map(int, self.Wn.split(' ')))
+        self.Wn = list(map(int, self.Wn_le.text().split(' ')))
         if self.method == 'lowpass' or self.method == 'highpass':
             self.Wn = self.Wn[0]
 
@@ -339,7 +341,7 @@ class FilterI:
             self.order_le.setText(str(self.cal_order))
             self.Wn_le.setText(' '.join(map(str, self.cal_Wn)))
 
-    def resetCalculateParmas(self):
+    def resetCalculateParams(self):
         """
         每次参数改动后重置计算按钮
         Returns:
@@ -424,13 +426,12 @@ class FilterII:
         self.data = data
         self.filter_name = filter_name
         self.filter = self.filter_names[filter_name]
+        self.method = None
         self.sampling_rate = sampling_rate
         self.w0 = int(0.2 * sampling_rate)
         self.Q = 30.
         self.ftype = 'notch'
         self.pass_zero = False
-
-        self.dialog = None
 
         self.b = None
         self.a = None
@@ -578,15 +579,13 @@ class FilterHandler:
             if self.filter_name in {'Butterworth', 'Chebyshev type I', 'Chebyshev type II',
                                     'Elliptic (Cauer)', 'Bessel/Thomson'}:
                 self.obj = FilterI(self.filter_name, data, sampling_rate)
-                self.method = self.obj.method
             else:
                 self.obj = FilterII(self.filter_name, data, sampling_rate)
-                self.method = None
-
         self.obj.draw = False
         self.obj.sampling_rate = sampling_rate
         self.obj.data = data
         self.obj.runDialog()
+        self.method = self.obj.method
 
         if self.obj.draw:
             self.data = self.obj.data

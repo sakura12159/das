@@ -9,6 +9,7 @@ from typing import Optional
 
 import numpy as np
 import pywt
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QWidget, QScrollArea
 
@@ -32,10 +33,10 @@ class DWPTHandler:
         self.sampling_rate = 0
 
         self.flag = True  # 默认操作为分解
-        self.reconstruct = ['a', 'd']  # 重构节点名称
+        # self.reconstruct = ['a', 'd']  # 重构节点名称
         self.family = 'bior'  # 小波族索引
         self.wavelet = 'bior1.1'  # 小波
-        self.decompose_level = 1  # 分解层数
+        self.decompose_level = 3  # 分解层数
         self.decompose_max_level = None  # 显示的最大分解层数
         self.padding_mode = 'zero'  # 数据填充模式
 
@@ -51,21 +52,21 @@ class DWPTHandler:
         self.decompose_radiobtn = RadioButton('分解')
         self.decompose_radiobtn.setChecked(self.flag)
 
-        reconstruct_radiobtn = RadioButton('重构')
-        reconstruct_radiobtn.setChecked(not self.flag)
+        # reconstruct_radiobtn = RadioButton('重构')
+        # reconstruct_radiobtn.setChecked(not self.flag)
 
-        reconstruct_label = Label('重构子节点')
-        self.reconstruct_line_edit = LineEdit()
-        self.reconstruct_line_edit.setFixedWidth(500)
-        self.reconstruct_line_edit.setToolTip('选择重构的子节点，a为近似节点路径分支，d为细节节点路径分支，'
-                                              '多个a或d相连代表了子节点路径')
+        # reconstruct_label = Label('重构子节点')
+        # self.reconstruct_line_edit = LineEdit()
+        # self.reconstruct_line_edit.setFixedWidth(500)
+        # self.reconstruct_line_edit.setToolTip('选择重构的子节点，a为近似节点路径分支，d为细节节点路径分支，'
+        #                                       '多个a或d相连代表了子节点路径')
+        #
+        # self.reconstruct_line_edit.setText(str(self.reconstruct))
 
-        self.reconstruct_line_edit.setText(str(self.reconstruct))
-
-        if not hasattr(self, 'subnodes'):
-            reconstruct_radiobtn.setEnabled(False)
-            reconstruct_label.setEnabled(False)
-            self.reconstruct_line_edit.setEnabled(False)
+        # if not hasattr(self, 'subnodes'):
+        #     reconstruct_radiobtn.setEnabled(False)
+        #     reconstruct_label.setEnabled(False)
+        #     self.reconstruct_line_edit.setEnabled(False)
 
         label = Label('选择小波：')
 
@@ -106,7 +107,7 @@ class DWPTHandler:
 
         vbox = QVBoxLayout()
         hbox1 = QHBoxLayout()
-        hbox2 = QHBoxLayout()
+        # hbox2 = QHBoxLayout()
         hbox3 = QHBoxLayout()
 
         hbox1.addWidget(self.decompose_radiobtn)
@@ -117,10 +118,10 @@ class DWPTHandler:
         hbox1.addWidget(name_label)
         hbox1.addWidget(self.name_combx)
 
-        hbox2.addWidget(reconstruct_radiobtn)
-        hbox2.addStretch(1)
-        hbox2.addWidget(reconstruct_label)
-        hbox2.addWidget(self.reconstruct_line_edit)
+        # hbox2.addWidget(reconstruct_radiobtn)
+        # hbox2.addStretch(1)
+        # hbox2.addWidget(reconstruct_label)
+        # hbox2.addWidget(self.reconstruct_line_edit)
 
         hbox3.addWidget(decompose_level_label)
         hbox3.addWidget(self.decompose_level_line_edit)
@@ -133,8 +134,8 @@ class DWPTHandler:
         vbox.addLayout(hbox1)
         vbox.addSpacing(10)
         vbox.addLayout(hbox3)
-        vbox.addSpacing(10)
-        vbox.addLayout(hbox2)
+        # vbox.addSpacing(10)
+        # vbox.addLayout(hbox2)
         vbox.addSpacing(10)
         vbox.addWidget(btn)
 
@@ -169,8 +170,8 @@ class DWPTHandler:
         Returns:
 
         """
-        self.flag = self.decompose_radiobtn.isChecked()
-        self.reconstruct = self.reconstruct_line_edit.text()
+        # self.flag = self.decompose_radiobtn.isChecked()
+        # self.reconstruct = self.reconstruct_line_edit.text()
         self.decompose_level = int(self.decompose_level_line_edit.text())
         self.decompose_max_level = int(self.decompose_max_level_line_edit.text())
         self.padding_mode = self.padding_mode_combx.currentText()
@@ -189,14 +190,14 @@ class DWPTHandler:
                                               decompose=True)  # 获得当前分解层数下的各节点
             self.reconstruct = [i.path for i in self.subnodes]
 
-        else:
-            total_paths = [i.path for i in self.subnodes]
-            self.reconstruct = str(self.reconstruct).split("','")
-            self.reconstruct = re.findall('\w+', self.reconstruct[0])
-
-            for i in total_paths:
-                if i not in self.reconstruct:
-                    del self.wp[i]
+        # else:
+        #     total_paths = [i.path for i in self.subnodes]
+        #     self.reconstruct = str(self.reconstruct).split("','")
+        #     self.reconstruct = re.findall('\w+', self.reconstruct[0])
+        #
+        #     for i in total_paths:
+        #         if i not in self.reconstruct:
+        #             del self.wp[i]
 
         if self.flag:
             wgt = QWidget()
@@ -244,15 +245,15 @@ class DWPTHandler:
             scroll_area.setWidget(wgt)
             self.ret = scroll_area
 
-        else:
-            self.data = self.wp.reconstruct()  # 重构信号
-            combined_widget = initCombinedPlotWidget(self.data,
-                                                     '小波包重构',
-                                                     self.sampling_times_from,
-                                                     self.sampling_times_to,
-                                                     self.sampling_times,
-                                                     self.sampling_rate)
-            self.ret = combined_widget
+        # else:
+        #     self.data = self.wp.reconstruct()  # 重构信号
+        #     combined_widget = initCombinedPlotWidget(self.data,
+        #                                              '小波包重构',
+        #                                              self.sampling_times_from,
+        #                                              self.sampling_times_to,
+        #                                              self.sampling_times,
+        #                                              self.sampling_rate)
+        #     self.ret = combined_widget
 
     def run(self,
             data: np.array,

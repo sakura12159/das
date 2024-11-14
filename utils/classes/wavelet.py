@@ -9,6 +9,7 @@ from typing import Optional
 
 import numpy as np
 import pywt
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QWidget, QScrollArea
 from matplotlib import pyplot as plt
@@ -191,10 +192,10 @@ class DWTHandler:
         self.sampling_rate = 0
 
         self.flag = True  # 默认操作为分解
-        self.reconstruct = ['cA1', 'cD1']  # 重构系数名称
+        # self.reconstruct = ['cA1', 'cD1']  # 重构系数名称
         self.family = 'bior'  # 小波族索引
         self.wavelet = 'bior1.1'  # 小波
-        self.decompose_level = 1  # 分解层数
+        self.decompose_level = 3  # 分解层数
         self.decompose_level_calculated = False  # 是否使用函数计算最大分解层数
         self.padding_mode = 'zero'  # 数据填充模式
 
@@ -213,16 +214,16 @@ class DWTHandler:
         reconstruct_radiobtn = RadioButton('重构')
         reconstruct_radiobtn.setChecked(not self.flag)
 
-        reconstruct_label = Label('重构系数')
-        self.reconstruct_line_edit = LineEdit()
-        self.reconstruct_line_edit.setFixedWidth(500)
-        self.reconstruct_line_edit.setToolTip('选择cAn和cDn系数进行重构，cAn为近似系数，cDn-cD1为细节系数')
-        self.reconstruct_line_edit.setText(str(self.reconstruct))
+        # reconstruct_label = Label('重构系数')
+        # self.reconstruct_line_edit = LineEdit()
+        # self.reconstruct_line_edit.setFixedWidth(500)
+        # self.reconstruct_line_edit.setToolTip('选择cAn和cDn系数进行重构，cAn为近似系数，cDn-cD1为细节系数')
+        # self.reconstruct_line_edit.setText(str(self.reconstruct))
 
-        if not hasattr(self, 'coeffs'):
-            reconstruct_radiobtn.setEnabled(False)
-            reconstruct_label.setEnabled(False)
-            self.reconstruct_line_edit.setEnabled(False)
+        # if not hasattr(self, 'coeffs'):
+        #     reconstruct_radiobtn.setEnabled(False)
+        #     reconstruct_label.setEnabled(False)
+        #     self.reconstruct_line_edit.setEnabled(False)
 
         label = Label('选择小波：')
 
@@ -260,7 +261,7 @@ class DWTHandler:
 
         vbox = QVBoxLayout()
         hbox1 = QHBoxLayout()
-        hbox2 = QHBoxLayout()
+        # hbox2 = QHBoxLayout()
         hbox3 = QHBoxLayout()
 
         hbox1.addWidget(self.decompose_radiobtn)
@@ -271,10 +272,10 @@ class DWTHandler:
         hbox1.addWidget(name_label)
         hbox1.addWidget(self.name_combx)
 
-        hbox2.addWidget(reconstruct_radiobtn)
-        hbox2.addStretch(1)
-        hbox2.addWidget(reconstruct_label)
-        hbox2.addWidget(self.reconstruct_line_edit)
+        # hbox2.addWidget(reconstruct_radiobtn)
+        # hbox2.addStretch(1)
+        # hbox2.addWidget(reconstruct_label)
+        # hbox2.addWidget(self.reconstruct_line_edit)
 
         hbox3.addWidget(decompose_level_label)
         hbox3.addWidget(self.decompose_level_line_edit)
@@ -287,8 +288,8 @@ class DWTHandler:
         vbox.addLayout(hbox1)
         vbox.addSpacing(10)
         vbox.addLayout(hbox3)
-        vbox.addSpacing(10)
-        vbox.addLayout(hbox2)
+        # vbox.addSpacing(10)
+        # vbox.addLayout(hbox2)
         vbox.addSpacing(10)
         vbox.addWidget(btn)
 
@@ -312,8 +313,8 @@ class DWTHandler:
         Returns:
 
         """
-        self.flag = self.decompose_radiobtn.isChecked()
-        self.reconstruct = self.reconstruct_line_edit.text()
+        # self.flag = self.decompose_radiobtn.isChecked()
+        # self.reconstruct = self.reconstruct_line_edit.text()
         self.wavelet = self.name_combx.currentText()
         self.decompose_level = int(self.decompose_level_line_edit.text())
         self.decompose_level_calculated = self.decompose_level_checkbx.isChecked()
@@ -332,28 +333,28 @@ class DWTHandler:
             self.coeffs = pywt.wavedec(self.data, wavelet=self.wavelet,
                                        mode=self.padding_mode,
                                        level=self.decompose_level)  # 求分解系数
-            self.reconstruct = []
-            self.reconstruct.append(f'cA{self.decompose_level}')
-            for i in range(len(self.coeffs) - 1, 0, -1):
-                self.reconstruct.append(f'cD{i}')
-            self.former_reconstruct = self.reconstruct
+            # self.reconstruct = []
+            # self.reconstruct.append(f'cA{self.decompose_level}')
+            # for i in range(len(self.coeffs) - 1, 0, -1):
+            #     self.reconstruct.append(f'cD{i}')
+            # self.former_reconstruct = self.reconstruct
 
-        else:
-            rec_coeffs_split = str(self.reconstruct).split("'")
-            rec_coeffs = []
-            for i in rec_coeffs_split:
-                coeff = re.match('^\w{2}\d+$', i)
-                if coeff is not None:
-                    rec_coeffs.append(coeff.group())
-            self.reconstruct = rec_coeffs  # 更新规范的重构系数显示
-
-            for i in self.former_reconstruct:
-                if i not in rec_coeffs:  # 删除的系数置0
-                    if i == f'cA{self.decompose_level}':
-                        self.coeffs[0] = np.zeros_like(self.coeffs[0])
-                    else:
-                        number = int(re.match('^cD(\d+)$', i).group(1))
-                        self.coeffs[-number] = np.zeros_like(self.coeffs[-number])
+        # else:
+        #     rec_coeffs_split = str(self.reconstruct).split("'")
+        #     rec_coeffs = []
+        #     for i in rec_coeffs_split:
+        #         coeff = re.match('^\w{2}\d+$', i)
+        #         if coeff is not None:
+        #             rec_coeffs.append(coeff.group())
+        #     self.reconstruct = rec_coeffs  # 更新规范的重构系数显示
+        #
+        #     for i in self.former_reconstruct:
+        #         if i not in rec_coeffs:  # 删除的系数置0
+        #             if i == f'cA{self.decompose_level}':
+        #                 self.coeffs[0] = np.zeros_like(self.coeffs[0])
+        #             else:
+        #                 number = int(re.match('^cD(\d+)$', i).group(1))
+        #                 self.coeffs[-number] = np.zeros_like(self.coeffs[-number])
 
         if self.flag:
             wgt = QWidget()
@@ -401,15 +402,15 @@ class DWTHandler:
             scroll_area.setWidget(wgt)
             self.ret = scroll_area
 
-        else:
-            self.data = pywt.waverec(self.coeffs, wavelet=self.wavelet, mode=self.padding_mode)[:self.sampling_times]  # 重构信号
-            combined_widget = initCombinedPlotWidget(self.data,
-                                                     '离散小波变换重构',
-                                                     self.sampling_times_from,
-                                                     self.sampling_times_to,
-                                                     self.sampling_times,
-                                                     self.sampling_rate)
-            self.ret = combined_widget
+        # else:
+        #     self.data = pywt.waverec(self.coeffs, wavelet=self.wavelet, mode=self.padding_mode)[:self.sampling_times]  # 重构信号
+        #     combined_widget = initCombinedPlotWidget(self.data,
+        #                                              '离散小波变换重构',
+        #                                              self.sampling_times_from,
+        #                                              self.sampling_times_to,
+        #                                              self.sampling_times,
+        #                                              self.sampling_rate)
+        #     self.ret = combined_widget
 
     def run(self,
             data: np.array,

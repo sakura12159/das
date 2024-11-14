@@ -31,7 +31,7 @@ class EMDHandler:
 
         self.emd_method = 'emd'
         self.imfs_res_num = 5  # 所有模态加残余模态的数量
-        self.reconstruct_nums = str([i for i in range(1, 5)])  # 重构模态号
+        self.reconstruct_nums = str(list(range(1, 5)))  # 重构模态号
         self.emd_options_flag = True  # 默认操作为分解
         self.eemd_trials = 100  # 添加噪声点数量？
         self.eemd_noise_width = 0.05  # 添加的高斯噪声的标准差
@@ -151,7 +151,7 @@ class EMDHandler:
         reconstruct_imf_number_label = Label('重构的IMF')
         self.emd_reconstruct_line_edit = LineEdit()
         self.emd_reconstruct_line_edit.setToolTip('重构的IMF号，应用逗号或空格分隔')
-        self.emd_reconstruct_line_edit.setText(str(self.reconstruct_nums))
+        self.emd_reconstruct_line_edit.setText(self.reconstruct_nums)
 
         if not hasattr(self, 'imfs_res'):
             self.emd_reconstruct_radio_btn.setEnabled(False)
@@ -291,8 +291,9 @@ class EMDHandler:
                 self.imfs_res_num = 10
             else:
                 self.imfs_res_num = int(self.emd_decompose_line_edit.text()) + 1
+            self.reconstruct_nums = str(list(range(1, self.imfs_res_num)))
         else:
-            self.reconstruct_nums = ''.join(self.emd_reconstruct_line_edit.text())
+            self.reconstruct_nums = self.emd_reconstruct_line_edit.text()
 
         self.eemd_trials = int(self.eemd_trials_line_edit.text())
         self.eemd_noise_width = float(self.eemd_noise_width_line_edit.text())
