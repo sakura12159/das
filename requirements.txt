@@ -1,0 +1,8 @@
+PyQt5
+soundfile
+numpy
+scipy
+pyqtgraph
+matplotlib
+EMD-signal
+PyWavelets
