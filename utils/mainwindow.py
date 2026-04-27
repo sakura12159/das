@@ -422,7 +422,7 @@ class MainWindow(QMainWindow):
         QTableWidget.resizeRowsToContents(self.files_table_widget)
         QTableWidget.resizeColumnsToContents(self.files_table_widget)  # 设置表格排与列的宽度随内容改变
         self.files_table_widget.setSelectionBehavior(QAbstractItemView.SelectRows)  # 设置一次选中一排内容
-        self.files_table_widget.currentItemChanged.connect(self.selectDataFromTable)
+        self.files_table_widget.itemClicked.connect(self.selectDataFromTable)
 
         # 文件区布局
         file_hbox.addWidget(self.file_path_line_edit)

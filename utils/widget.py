@@ -4,11 +4,11 @@
 @Author  : zxy
 @File    : widget.py
 """
-from cmath import inf
+from typing import Callable, Union, Tuple
 
 import numpy as np
 import pyqtgraph as pg
-from typing import Callable, Union, Tuple
+from scipy.spatial.distance import euclidean
 
 from PyQt5.QtCore import QRegExp, Qt
 from PyQt5.QtGui import QRegExpValidator, QFont, QColor
@@ -286,11 +286,4 @@ class MyPlotWidget(pg.PlotWidget):
 
     def searchPointIndex(self, xpos: float, ypos: float) -> int:
         """寻找x坐标附近的点，返回该点的索引"""
-        mn = inf
-        idx = -1
-        for i, (x, y) in enumerate(zip(*self.data)):
-            dis = ((xpos - x) ** 2 + (ypos - y) ** 2) ** 0.5
-            if dis < mn:
-                mn = dis
-                idx = i
-        return idx
+        return np.argmin([euclidean((xpos, ypos), (x, y)) for x, y in zip(*self.data)])
